@@ -1,0 +1,156 @@
+name: OSS guardrails
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  # Tier 1a: secret scanning. Runs on every PR including forks (no secrets needed).
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    env:
+      GITLEAKS_VERSION: "8.21.2"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so gitleaks scans the entire PR commit range,
+          # not just the head commit (default shallow checkout).
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        env:
+          # sha256 of gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz from the
+          # release's published checksums file. Update together with the version.
+          GITLEAKS_SHA256: "5bc41815076e6ed6ef8fbecc9d9b75bcae31f39029ceb55da08086315316e3ba"
+        run: |
+          curl -sSfL -o gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf gitleaks.tar.gz gitleaks
+          # git-mode (default): scans tracked content and history only.
+          # Never use --no-git: it would read gitignored local dirs.
+          # --redact: matched secret content never appears in public CI logs.
+          ./gitleaks detect --source . --redact --no-banner --verbose
+
+  # Tier 1b: structural reference checks. Generic patterns, safe to publish,
+  # no secrets needed — runs on every PR including forks.
+  structural-scan:
+    name: Structural reference scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan tracked files for forbidden reference shapes
+        run: |
+          set -u
+          violations=0
+
+          scan() {
+            local label="$1" pattern="$2"
+            local matches rc=0
+            # Tracked files only; exclude this workflow (it defines the patterns).
+            matches=$(git grep -nIE "$pattern" -- . ':(exclude).github/workflows/oss-guardrails.yml') || rc=$?
+            if [ "$rc" -gt 1 ]; then
+              # Fail closed: a grep hard error must not pass as "no match".
+              echo "::error::git grep failed (exit ${rc}) while scanning for: ${label}"
+              violations=1
+            elif [ "$rc" -eq 0 ]; then
+              echo "::error::Forbidden reference shape: ${label}"
+              # file:line only
+              echo "${matches}" | cut -d: -f1,2
+              violations=1
+            fi
+          }
+
+          # Real org slug in an MCP URL — only the <org-slug> placeholder is allowed.
+          scan "real org slug in MCP URL (use <org-slug>)" 'organizations/[A-Za-z0-9_-]+/mcp'
+
+          # Internal source-path citations (e.g. internal/foo/bar.go).
+          scan "internal source-path citation" 'internal/[A-Za-z0-9_-]+(/[A-Za-z0-9_.-]+)+\.[A-Za-z]+'
+
+          # Bare commit-SHA citation shape (e.g. "file.md @ 1a2b3c4").
+          scan "bare commit-SHA citation" '@ [0-9a-f]{7,40}([^A-Za-z0-9]|$)'
+
+          exit "${violations}"
+
+  # Tier 2: forbidden-term scan against a private denylist.
+  # The denylist lives in the FORBIDDEN_TERMS secret (newline-separated) because
+  # the list itself is sensitive and must never be committed.
+  # GitHub does not expose secrets to fork-PR workflows, so this job is skipped
+  # on fork PRs (visible as skipped) and re-runs on the merge push to master.
+  # Maintainers run it manually against fork-PR heads before merging.
+  forbidden-terms:
+    name: Forbidden terms (denylist — skipped on fork PRs, runs on merge)
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+    env:
+      FORBIDDEN_TERMS: ${{ secrets.FORBIDDEN_TERMS }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan tracked files against denylist
+        run: |
+          set -u
+          # Fail loud on absent/empty secret — an empty pattern list would
+          # silently match nothing and pass the check without scanning.
+          # Normalize the secret: strip CR (a CRLF-pasted secret would embed
+          # \r in every pattern and silently match nothing), trim per-line
+          # whitespace, drop empty lines.
+          printf '%s\n' "${FORBIDDEN_TERMS}" \
+            | tr -d '\r' \
+            | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^[[:space:]]*$/d' \
+            > "${RUNNER_TEMP}/terms.txt"
+
+          if [ ! -s "${RUNNER_TEMP}/terms.txt" ]; then
+            echo "::error::FORBIDDEN_TERMS secret is unset, empty, or contains no usable terms after normalization. Failing loud — refusing to skip the scan silently."
+            exit 1
+          fi
+
+          # Single git grep pass — tracked files only by construction, and
+          # exit codes are unambiguous (0 match, 1 no match, >1 error).
+          rc=0
+          raw=$(git grep -nIiF -f "${RUNNER_TEMP}/terms.txt") || rc=$?
+
+          if [ "$rc" -gt 1 ]; then
+            # Fail closed: a grep hard error must not pass as "no match".
+            echo "::error::git grep failed (exit ${rc}) during the denylist scan."
+            exit 1
+          elif [ "$rc" -eq 0 ]; then
+            # Report file:line only — never the matched content, which would
+            # echo a forbidden term into publicly readable logs.
+            echo "::error::Forbidden term(s) found at the following file:line locations (content withheld):"
+            printf '%s\n' "${raw}" | cut -d: -f1,2
+            exit 1
+          fi
+
+  # Sync parity: packaged plugin skills must match canonical skills/.
+  # No path filter — this job must report a status on every PR so it can be a
+  # required check without deadlocking docs-only PRs (a path-filtered required
+  # check never reports and leaves the PR perpetually pending).
+  sync-parity:
+    name: Plugin skill sync parity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify packaged plugin skills are synced
+        run: |
+          scripts/sync-agent-plugin-skills.sh
+          # status --porcelain covers modified AND untracked files, so a sync
+          # that creates a new packaged skill file also fails parity until
+          # the file is committed (git diff --exit-code misses untracked).
+          drift=$(git status --porcelain -- plugins/last9/skills)
+          if [ -n "${drift}" ]; then
+            echo "::error::Packaged plugin skills are out of sync with skills/:"
+            echo "${drift}"
+            exit 1
+          fi

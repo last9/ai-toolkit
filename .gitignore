@@ -1,0 +1,6 @@
+# Internal planning artifacts — not for the public repo
+docs/
+
+# Local agent state
+.claude/
+.codex/

@@ -1,0 +1,37 @@
+{
+  "name": "last9",
+  "version": "0.1.0",
+  "description": "Last9 observability skills for Codex. Query logs and traces through the hosted Last9 MCP server with service-first narrowing and verified query guardrails.",
+  "author": {
+    "name": "Last9",
+    "url": "https://last9.io"
+  },
+  "homepage": "https://github.com/last9/ai-toolkit",
+  "repository": "https://github.com/last9/ai-toolkit",
+  "keywords": [
+    "last9",
+    "observability",
+    "mcp",
+    "logs",
+    "traces",
+    "debugging"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Last9",
+    "shortDescription": "Debug Last9 logs and traces from Codex using the hosted MCP server.",
+    "longDescription": "Last9 packages Codex skills for production debugging workflows on top of the hosted Last9 MCP server. Use last9-logs for log-first investigation and logjson query guardrails; use last9-traces for trace-first investigation and tracejson query guardrails.",
+    "developerName": "Last9",
+    "category": "Coding",
+    "capabilities": [
+      "Interactive",
+      "Read"
+    ],
+    "websiteURL": "https://last9.io",
+    "defaultPrompt": [
+      "Use last9-logs to investigate log errors",
+      "Use last9-traces to diagnose a slow service"
+    ],
+    "screenshots": []
+  }
+}

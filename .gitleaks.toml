@@ -1,0 +1,15 @@
+# gitleaks configuration for ai-toolkit.
+# Extends the default ruleset; allowlists the placeholder credential shapes
+# this repo deliberately documents (install instructions, skill examples).
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Documented placeholder credentials and template variables"
+regexes = [
+  '''<org-slug>''',
+  '''<your-api-key>''',
+  '''<base64-credentials>''',
+  '''\$\{env:[A-Za-z_]+\}''',
+]
