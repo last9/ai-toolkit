@@ -1,0 +1,16 @@
+{
+  "name": "last9-ai-toolkit",
+  "description": "Last9 AI Toolkit plugin marketplace for Grok Build.",
+  "owner": {
+    "name": "Last9",
+    "url": "https://last9.io"
+  },
+  "plugins": [
+    {
+      "name": "last9",
+      "description": "Use Last9 observability workflows from Grok Build through the hosted Last9 MCP server.",
+      "source": "./plugins/last9",
+      "category": "coding"
+    }
+  ]
+}
