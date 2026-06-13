@@ -16,9 +16,22 @@ Extends the `get_logs`, `get_service_logs`, and `get_log_attributes` tool instru
 
 Requires the [Last9 MCP server](https://github.com/last9/last9-mcp-server) connected to this session. If `get_logs`, `get_service_logs`, or `get_log_attributes` are not available as tools, **stop** — tell the user to install and authenticate the Last9 MCP server first, and link them to the README above. Never fabricate or simulate these tool calls.
 
+## Tool parameters at a glance
+
+For agents consuming this skill outside Claude Code (copy-pasted into a custom system prompt), this is the minimum parameter surface; the MCP tool descriptions remain authoritative.
+
+| Tool | Purpose | Key params |
+|------|---------|-----------|
+| `get_log_attributes` | Discover the global label catalog (names that exist somewhere in the window) | time params; optional `index` |
+| `get_log_attributes_for_pipeline` | Discover the fields that actually exist within a filtered scope, each with its exact `filter_field` | `pipeline` (filter stages), time params, optional `index` |
+| `get_logs` | Filter / aggregate via logjson pipeline | `logjson` (array of stages), time params, optional `index` |
+| `get_service_logs` | Quick service-scoped raw lines | `service`, `severity_filters`, `body_filters`, `limit`, time params |
+
+**Time params (every tool):** `lookback_minutes` for relative windows, or `start_time_iso` + `end_time_iso` for explicit ranges — see Time discipline below.
+
 ## Before any query — anti-pattern checklist
 
-Check every query against these five. Each one names the redirect, not just the mistake.
+Check every query against these seven. Each one names the redirect, not just the mistake.
 
 | # | Anti-pattern | Do this instead |
 |---|--------------|-----------------|
@@ -27,19 +40,37 @@ Check every query against these five. Each one names the redirect, not just the 
 | 3 | Pulling raw log lines for a broad symptom | Aggregate first (count by severity / attribute), then drill into the dominant pattern |
 | 4 | Pipeline starting with an `aggregate` stage | First stage must be a `filter` — a missing filter is silently treated as match-all, widening scope to every log in the window. Lead with an explicit filter so scope is deliberate |
 | 5 | Bare dotted field refs (`service.name`, `k8s.namespace.name`) | `ServiceName` / `attributes['field.name']` / `resources['field.name']` — a few refs (`service.name`, `k8s.*`) are silently normalized as aliases; everything else is rejected. Always write the canonical form |
+| 6 | Assuming an attribute name carries over between services (`attributes['http.status_code']` on one service, `attributes['status_code']` on another) | Attribute names vary per scope with no error on a wrong guess — the filter silently matches nothing, and the **global** catalog can list keys that are empty for your scope. Confirm via `get_log_attributes_for_pipeline` with your scoping filter, and use only the `filter_field` it returns |
+| 7 | Fabricating fixed timestamps for a relative request ("last 30 mins") | `lookback_minutes` — see Time discipline below |
 
 ## Methodology — service first, aggregate first, drill last
 
 Work through these steps in order. Skip a step only when the conversation already answered it.
 
 1. **Establish scope — surface, don't interrogate** — if the user named a service loosely or you suspect a typo, resolve it with `did_you_mean` (`type: service`). If no service is named, don't ask blind: surface the inventory — run a `filter` → `aggregate` `$count` grouped by `ServiceName` (pre-filtered by the symptom when there is one) and present the top candidates for the user to pick from. When multiple environments exist, surface `resources['deployment.environment']` values the same way and confirm which one — include the empty-env bucket explicitly when present, since unset environments often dominate. (Use the aggregate to surface environments; `did_you_mean` coverage for environment names is unreliable.) If the service dimension doesn't discriminate (catch-all service, or none), scope by the next-best dimension attribute discovery surfaces — namespace, host, environment. Never fire an unscoped body search.
-2. **Discover attributes — and offer them as narrowing handles** — call `get_log_attributes` to see available log and resource attributes. It is global (time-window scoped, no service param) — service scoping happens in your filter stage, not here. Use it to learn the exact field names before filtering; never guess whether a field lives in `attributes[...]` or `resources[...]`. When scope is still broad, present the discriminating resource attributes (`resources['k8s.namespace.name']`, `resources['k8s.deployment.name']`, `resources['deployment.environment']`, host) as narrowing options the user can pick — an aggregate `$count` grouped by a candidate attribute shows them where their logs actually concentrate. A handle whose buckets split evenly has no narrowing power — pick a different one.
+2. **Discover attributes — and offer them as narrowing handles** — call `get_log_attributes` to see available log and resource attributes. It is global (time-window scoped, no service param) — service scoping happens in your filter stage, not here. Use it to learn the exact field names before filtering; never guess whether a field lives in `attributes[...]` or `resources[...]`. Discovery and query are strictly sequential: discover, wait for results, then build the query from the names returned — never fire discovery and `get_logs` in the same response. Discovery is two-stage when filtering on a structured attribute (an HTTP/gRPC status, `user_id`, latency, region — any field-level value, not a free-text body match): the global catalog first, then **confirm within your scope** — build the scoping filter stage(s) (commonly `{"$eq": ["ServiceName", "<service>"]}`, but possibly namespace, environment, host, or a combination), call `get_log_attributes_for_pipeline` with that pipeline, and filter using only the `filter_field` values it returns. The global catalog can list keys that are empty for your scope, and near-duplicate names coexist (`status_code` on some sources, `http.status_code` on others — neither is a safe default). If `get_log_attributes_for_pipeline` is unavailable (older MCP server), fall back to verifying the candidate field with an aggregate `$count` grouped by it inside your scope before trusting a filter on it. When scope is still broad, present the discriminating resource attributes (`resources['k8s.namespace.name']`, `resources['k8s.deployment.name']`, `resources['deployment.environment']`, host) as narrowing options the user can pick — an aggregate `$count` grouped by a candidate attribute shows them where their logs actually concentrate. A handle whose buckets split evenly has no narrowing power — pick a different one.
 3. **Aggregate to find the pattern** — call `get_logs` with a pipeline: `filter` stage (service + symptom conditions) followed by an `aggregate` stage (e.g., `$count` grouped by `SeverityText` or a suspect attribute). Present the narrowed pattern before pulling raw lines.
 4. **Narrow with attribute filters** — tighten the filter stage using the discovered attributes (`$eq`, `$gte` on `attributes['http.status_code']`, etc.).
 5. **Drill into raw lines** — call `get_service_logs` (simple: `service`, `severity_filters`, `body_filters`, `limit`) or `get_logs` with the narrowed filter.
 6. **Body search — last resort** — `$containsWords` on `Body` only inside the already-narrowed scope, and only for text no attribute covers.
 
-**Time windows:** `lookback_minutes` (default 5) or `start_time_iso` + `end_time_iso` are **top-level tool params** — never write `Timestamp` conditions inside the pipeline for time ranges.
+## Time discipline
+
+`lookback_minutes` (default 5) or `start_time_iso` + `end_time_iso` are **top-level tool params** — never write `Timestamp` conditions inside the pipeline for time ranges.
+
+- **Relative requests** ("last 30 mins", "past hour") → `lookback_minutes`. Never fabricate fixed timestamps for a relative request — a generated "now" is wrong by the time the query runs and silently shifts the window.
+- **Explicit dates** ("on 2026-06-08 between 10:00 and 11:00 UTC") → `start_time_iso` / `end_time_iso` in RFC3339/ISO8601 UTC, e.g. `2026-06-08T10:00:00Z`. Legacy `YYYY-MM-DD HH:MM:SS` is compatibility-only — do not generate it.
+- **Both present** (explicit range plus a relative phrase) → explicit timestamps win; drop `lookback_minutes`.
+
+## Index targeting
+
+Include `index` in `get_logs` / `get_log_attributes` / `get_log_attributes_for_pipeline` **only when the user explicitly names one**. Never guess or invent an index — omit the parameter entirely otherwise.
+
+| User says | `index` value |
+|-----------|---------------|
+| "rehydration index X" | `rehydration_index:X` |
+| "physical index X" or "index X" | `physical_index:X` |
+| no index named | omit `index` |
 
 ## logjson essentials
 
@@ -122,7 +153,8 @@ Rate over time windows:
 | Need | Tool |
 |------|------|
 | Resolve a fuzzy service name | `did_you_mean` (`type: service`) |
-| What attributes exist? | `get_log_attributes` |
+| What attributes exist anywhere in the window? | `get_log_attributes` |
+| Which fields actually exist in my filtered scope, and their exact `filter_field`? | `get_log_attributes_for_pipeline` |
 | Counts, grouping, rates, complex filters | `get_logs` (logjson pipeline) |
 | Quick service-scoped raw lines | `get_service_logs` |
 

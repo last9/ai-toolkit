@@ -9,6 +9,8 @@ Each skill encodes an investigation workflow the way the product intends it — 
 
 ## Skills
 
+MCP gives your agent access. Skills give it judgment.
+
 | Skill | What it teaches |
 |-------|-----------------|
 | [`last9-logs`](skills/last9-logs/SKILL.md) | Log investigation: scope to a service first, attribute filters over body search, aggregate before drilling into raw lines |

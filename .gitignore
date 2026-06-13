@@ -1,6 +1,10 @@
 # Internal planning artifacts — not for the public repo
 docs/
+STRATEGY.md
 
 # Local agent state
 .claude/
 .codex/
+
+# Local hygiene denylist — the list itself is the leak
+.skill-denylist
