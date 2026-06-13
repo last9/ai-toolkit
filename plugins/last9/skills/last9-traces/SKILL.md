@@ -16,6 +16,30 @@ Extends the `get_traces`, `get_service_traces`, and `get_trace_attributes` tool 
 
 Requires the [Last9 MCP server](https://github.com/last9/last9-mcp-server) connected to this session. If `get_traces`, `get_service_traces`, or `get_trace_attributes` are not available as tools, **stop** — tell the user to install and authenticate the Last9 MCP server first, and link them to the README above. Never fabricate or simulate these tool calls.
 
+## Tool parameters at a glance
+
+For agents consuming this skill outside Claude Code (copy-pasted into a custom system prompt), this is the minimum parameter surface; the MCP tool descriptions remain authoritative.
+
+| Tool | Purpose | Key params |
+|------|---------|-----------|
+| `get_trace_attributes` | Discover available trace field names (`filter_field`) | time params |
+| `get_traces` | Filter / aggregate via tracejson pipeline | tracejson pipeline, time params |
+| `get_service_traces` | Service-scoped traces or a specific trace | `service`, optional `trace_id`, time params |
+
+**Time params (every tool):** `lookback_minutes` for relative windows, or `start_time_iso` + `end_time_iso` for explicit ranges — see Time discipline below.
+
+## Attributes first — strict sequence
+
+Discovery and query are strictly sequential: call `get_trace_attributes`, wait for its results, then build the query from the `filter_field` values it returned — never fire discovery and `get_traces` in the same response. Attribute names vary per service with no error on a wrong guess (`attributes['http.status_code']` on one service, `attributes['status_code']` on another) — the filter silently returns zero results. Verify the name via discovery before filtering on it.
+
+## Time discipline
+
+`lookback_minutes` or `start_time_iso` + `end_time_iso` are **top-level tool params**.
+
+- **Relative requests** ("last 15 minutes", "past hour") → `lookback_minutes`. Never fabricate fixed timestamps for a relative request — a generated "now" is wrong by the time the query runs and silently shifts the window.
+- **Explicit dates** → `start_time_iso` / `end_time_iso` in RFC3339/ISO8601 UTC, e.g. `2026-06-08T10:00:00Z`. Legacy `YYYY-MM-DD HH:MM:SS` is compatibility-only — do not generate it.
+- **Both present** (explicit range plus a relative phrase) → explicit timestamps win; drop `lookback_minutes`.
+
 ## Guided investigation — 5 questions
 
 Ask one at a time. For each question, provide your recommended answer based on context already in the conversation; if the conversation already answers a question, skip it and state what you inferred.
@@ -30,6 +54,7 @@ Ask one at a time. For each question, provide your recommended answer based on c
 
 **Q3 — Time window**
 "When did you first notice the issue? Give a relative window ('last 15 minutes') or absolute start/end times."
+→ Map the answer per Time discipline above: relative → `lookback_minutes`; absolute → `start_time_iso` / `end_time_iso`.
 
 **Q4 — Symptom**
 "What are you seeing — errors, high latency, a specific operation failing, or something else?"
