@@ -3,7 +3,7 @@
 [![OSS guardrails](https://github.com/last9/ai-toolkit/actions/workflows/oss-guardrails.yml/badge.svg)](https://github.com/last9/ai-toolkit/actions/workflows/oss-guardrails.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-AI agents are good at writing queries and bad at knowing which query to write. This toolkit teaches coding agents — Claude Code, Codex, Cursor, and anything that speaks [Agent Skills](https://skills.sh) — how to investigate production systems with [Last9](https://last9.io): which tool to reach for, in what order, and which dead ends to skip.
+AI agents are good at writing queries and bad at knowing which query to write. This toolkit teaches coding agents — Claude Code, Codex, Grok Build, Cursor, and anything that speaks [Agent Skills](https://skills.sh) — how to investigate production systems with [Last9](https://last9.io): which tool to reach for, in what order, and which dead ends to skip.
 
 Each skill encodes an investigation workflow the way the product intends it — the skills hand off to one another when an investigation crosses domains.
 
@@ -29,7 +29,7 @@ npx skills add last9/ai-toolkit --skill last9-logs
 npx skills add last9/ai-toolkit -a claude-code
 ```
 
-Claude Code and Codex users can install through their plugin marketplaces instead. The marketplace package lives in `plugins/last9/`.
+Claude Code, Codex, and Grok Build users can install through their plugin marketplaces instead. The marketplace package lives in `plugins/last9/`. Grok Build reads the catalog from `.grok-plugin/marketplace.json` — add this repository as a marketplace, then install the `last9` plugin from inside the Grok Build plugin marketplace.
 
 ## Connecting to Last9
 

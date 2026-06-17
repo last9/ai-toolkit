@@ -1,13 +1,13 @@
 # Last9 Agent Plugin
 
-Public Codex and Claude Code plugin package for Last9 observability workflows.
+Public Codex, Claude Code, and Grok Build plugin package for Last9 observability workflows.
 
 This plugin packages the Last9 skills for agent marketplaces:
 
 - `last9-logs` — log-first investigation and logjson guardrails.
 - `last9-traces` — trace-first investigation and tracejson guardrails.
 
-The top-level `skills/` directory remains the canonical source. The package-local `skills/` directory is generated from it by `scripts/sync-agent-plugin-skills.sh` so marketplace installs are self-contained without hand-maintained drift.
+Each agent reads the same package through its own manifest — `.claude-plugin/plugin.json` for Claude Code, `.codex-plugin/plugin.json` for Codex, and `.grok-plugin/plugin.json` for Grok Build (whose plugin format mirrors Claude Code's). The top-level `skills/` directory remains the canonical source. The package-local `skills/` directory is generated from it by `scripts/sync-agent-plugin-skills.sh` so marketplace installs are self-contained without hand-maintained drift.
 
 If you are using the Agent Skills CLI or skills.sh directly, install from the repository root instead:
 
@@ -28,7 +28,7 @@ Add the hosted MCP endpoint to your local agent MCP config. For Codex:
 url = "https://app.last9.io/api/v4/organizations/<org-slug>/mcp"
 ```
 
-For Claude Code, add the same hosted endpoint through Claude Code's MCP configuration flow.
+For Claude Code, add the same hosted endpoint through Claude Code's MCP configuration flow. For Grok Build, add the same hosted endpoint through its MCP configuration (a `.mcp.json` entry or the in-terminal MCP flow).
 
 Then start your agent and run `/mcp` to authenticate.
 
