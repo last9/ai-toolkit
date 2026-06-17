@@ -1,6 +1,6 @@
 {
   "name": "last9",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Last9 observability skills for Codex. Query logs and traces through the hosted Last9 MCP server with service-first narrowing and verified query guardrails.",
   "author": {
     "name": "Last9",
