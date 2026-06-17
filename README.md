@@ -3,9 +3,9 @@
 [![OSS guardrails](https://github.com/last9/ai-toolkit/actions/workflows/oss-guardrails.yml/badge.svg)](https://github.com/last9/ai-toolkit/actions/workflows/oss-guardrails.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-AI agents are good at writing queries and bad at knowing which query to write. This toolkit teaches coding agents — Claude Code, Codex, Grok Build, Cursor, and anything that speaks [Agent Skills](https://skills.sh) — how to investigate production systems with [Last9](https://last9.io): which tool to reach for, in what order, and which dead ends to skip.
+AI agents are good at writing queries and bad at knowing which query to write. This toolkit teaches coding agents — Claude Code, Codex, Grok Build, Cursor, and anything that speaks [Agent Skills](https://skills.sh) — how to instrument and investigate production systems with [Last9](https://last9.io): which tool to reach for, in what order, and which dead ends to skip.
 
-Each skill encodes an investigation workflow the way the product intends it — the skills hand off to one another when an investigation crosses domains.
+Each skill encodes a workflow the way the product intends it — the skills hand off to one another when work crosses domains.
 
 ## Skills
 
@@ -13,6 +13,7 @@ MCP gives your agent access. Skills give it judgment.
 
 | Skill | What it teaches |
 |-------|-----------------|
+| [`go-agent-install`](skills/go-agent-install/SKILL.md) | Instrument a Go service with Last9 go-agent: detect the stack, wire chi + `database/sql` tracing, promote opt-in body capture, and verify spans land — without double-instrumenting |
 | [`last9-logs`](skills/last9-logs/SKILL.md) | Log investigation: scope to a service first, attribute filters over body search, aggregate before drilling into raw lines |
 | [`last9-traces`](skills/last9-traces/SKILL.md) | Trace investigation: a five-question interview that lands on the right tool call, plus a `tracejson` syntax reference card |
 
