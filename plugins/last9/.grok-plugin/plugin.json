@@ -1,0 +1,19 @@
+{
+  "name": "last9",
+  "version": "0.1.0",
+  "description": "Last9 observability skills for Grok Build. Query logs and traces through the hosted Last9 MCP server with service-first narrowing and verified query guardrails.",
+  "author": {
+    "name": "Last9",
+    "url": "https://last9.io"
+  },
+  "homepage": "https://github.com/last9/ai-toolkit",
+  "repository": "https://github.com/last9/ai-toolkit",
+  "keywords": [
+    "last9",
+    "observability",
+    "mcp",
+    "logs",
+    "traces",
+    "debugging"
+  ]
+}
