@@ -32,6 +32,8 @@ npx skills add last9/ai-toolkit -a claude-code
 
 Claude Code, Codex, and Grok Build users can install through their plugin marketplaces instead. The marketplace package lives in `plugins/last9/`. Grok Build reads the catalog from `.grok-plugin/marketplace.json` — add this repository as a marketplace, then install the `last9` plugin from inside the Grok Build plugin marketplace.
 
+Any client that implements the open [Agent Plugins](https://agent-plugins.org) standard (v1.0.0) — the format OpenAI, AWS, Cursor, GitHub, VS Code, and Vercel jointly adopted — can install `plugins/last9` directly by path: it ships a spec-conformant `plugin.json` at its root alongside the `skills/` directory, so no client-specific manifest is required.
+
 ## Connecting to Last9
 
 Last9 MCP is hosted, so there is no local server to run. Point your agent's MCP config at your organization's endpoint. For Codex:

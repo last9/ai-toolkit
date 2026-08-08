@@ -19,6 +19,8 @@ When you change a skill:
 
 CI enforces parity: if the generated copies drift from `skills/`, the sync-parity check fails your PR.
 
+The manifests under `plugins/last9/` (`plugin.json`, `.claude-plugin/plugin.json`, `.codex-plugin/plugin.json`, `.grok-plugin/plugin.json`) are hand-maintained, not generated — edit them directly. Their `version` fields are kept in sync by release-please via `extra-files` in `release-please-config.json`, so don't bump them by hand.
+
 ## Commit convention
 
 Use [Conventional Commits](https://www.conventionalcommits.org/): `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, optionally scoped (e.g., `feat(skills): ...`).

@@ -6,6 +6,11 @@ PLUGIN_DIR="$ROOT_DIR/plugins/last9"
 
 jq -e '.skills == "./skills/"' "$PLUGIN_DIR/.codex-plugin/plugin.json" >/dev/null
 
+# The root plugin.json is the Agent Plugins (agent-plugins.org) spec manifest.
+# Its skills/ location is fixed by the spec, not a declared field, so just
+# confirm the manifest itself is present and names this plugin.
+jq -e '.name == "last9"' "$PLUGIN_DIR/plugin.json" >/dev/null
+
 # Regenerate the packaged skills as an exact mirror of canonical skills/:
 # new skills are discovered automatically, deleted skills leave no stale copy.
 rm -rf "$PLUGIN_DIR/skills"
