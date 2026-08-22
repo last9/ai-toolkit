@@ -18,6 +18,17 @@
           "jsonpath": "$.version"
         }
       ]
+    },
+    "plugins/opencode-last9": {
+      "package-name": "opencode-last9",
+      "changelog-path": "CHANGELOG.md",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "package.json",
+          "jsonpath": "$.version"
+        }
+      ]
     }
   }
 }

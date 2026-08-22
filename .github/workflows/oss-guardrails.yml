@@ -148,7 +148,7 @@ jobs:
           # status --porcelain covers modified AND untracked files, so a sync
           # that creates a new packaged skill file also fails parity until
           # the file is committed (git diff --exit-code misses untracked).
-          drift=$(git status --porcelain -- plugins/last9/skills)
+          drift=$(git status --porcelain -- plugins/last9/skills plugins/opencode-last9/skills)
           if [ -n "${drift}" ]; then
             echo "::error::Packaged plugin skills are out of sync with skills/:"
             echo "${drift}"

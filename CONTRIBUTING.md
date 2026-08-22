@@ -4,7 +4,7 @@ Thanks for contributing! This repo ships AI-agent skills and plugin packages for
 
 ## The canonical-source model
 
-The top-level `skills/` directory is the **single source of truth**. The plugin package copies under `plugins/last9/skills/` are **generated** — never edit them directly.
+The top-level `skills/` directory is the **single source of truth**. The plugin package copies under `plugins/last9/skills/` and `plugins/opencode-last9/skills/` are **generated** — never edit them directly.
 
 When you change a skill:
 
@@ -29,7 +29,7 @@ Every PR runs:
 
 - **Secret scan** (gitleaks) — blocks credentials, tokens, and key-shaped strings. Documented placeholders like `<org-slug>` and `<your-api-key>` are allowlisted.
 - **Structural reference scan** — blocks real org slugs (use `<org-slug>`), internal source-path citations, and bare commit-SHA citations.
-- **Sync parity** — verifies `plugins/last9/skills/` matches `skills/`.
+- **Sync parity** — verifies `plugins/last9/skills/` and `plugins/opencode-last9/skills/` match `skills/`.
 
 ### A note for fork PRs
 
