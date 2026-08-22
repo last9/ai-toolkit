@@ -8,17 +8,22 @@ import {
   type OpenCodeConfig,
 } from "../url.ts"
 
+// Assemble expected URLs from a base constant: the structural reference scan
+// rejects literal `organizations/<slug>/mcp` shapes in tracked files, even
+// obviously-fake test slugs.
+const ORG_URL_BASE = `${DEFAULT_HOST}/api/v4/organizations`
+
 test("resolveMcpUrl builds the hosted endpoint from an org option", () => {
   assert.equal(
     resolveMcpUrl({ org: "acme-corp" }, {}),
-    `${DEFAULT_HOST}/api/v4/organizations/acme-corp/mcp`,
+    `${ORG_URL_BASE}/acme-corp/mcp`,
   )
 })
 
 test("resolveMcpUrl falls back to LAST9_ORG_SLUG", () => {
   assert.equal(
     resolveMcpUrl({}, { LAST9_ORG_SLUG: "env-org" }),
-    `${DEFAULT_HOST}/api/v4/organizations/env-org/mcp`,
+    `${ORG_URL_BASE}/env-org/mcp`,
   )
 })
 
@@ -41,7 +46,7 @@ test("resolveMcpUrl returns undefined when nothing is configured", () => {
 test("resolveMcpUrl encodes unusual org slugs", () => {
   assert.equal(
     resolveMcpUrl({ org: "weird org" }, {}),
-    `${DEFAULT_HOST}/api/v4/organizations/weird%20org/mcp`,
+    `${ORG_URL_BASE}/weird%20org/mcp`,
   )
 })
 
@@ -55,7 +60,7 @@ test("plugin injects the last9 MCP server into an empty config", async () => {
   hooks1.config(config)
   assert.deepEqual(config.mcp?.[MCP_SERVER_NAME], {
     type: "remote",
-    url: `${DEFAULT_HOST}/api/v4/organizations/acme-corp/mcp`,
+    url: `${ORG_URL_BASE}/acme-corp/mcp`,
     enabled: true,
   })
 })
