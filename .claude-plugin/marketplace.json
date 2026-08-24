@@ -10,7 +10,8 @@
     {
       "name": "last9",
       "description": "Use Last9 observability workflows from Claude Code through the hosted Last9 MCP server.",
-      "source": "./plugins/last9",
+      "source": "./",
+      "skills": ["./skills/"],
       "category": "coding"
     }
   ]

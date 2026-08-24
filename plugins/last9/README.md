@@ -7,7 +7,7 @@ This plugin packages the Last9 skills for agent marketplaces:
 - `last9-logs` — log-first investigation and logjson guardrails.
 - `last9-traces` — trace-first investigation and tracejson guardrails.
 
-Each agent reads the same package through its own manifest — `.claude-plugin/plugin.json` for Claude Code, `.codex-plugin/plugin.json` for Codex, and `.grok-plugin/plugin.json` for Grok Build (whose plugin format mirrors Claude Code's). The top-level `skills/` directory remains the canonical source. The package-local `skills/` directory is generated from it by `scripts/sync-agent-plugin-skills.sh` so marketplace installs are self-contained without hand-maintained drift.
+Claude Code and Codex read root-level marketplace manifests that point at the canonical repository-root `skills/` directory directly — adding a skill is a single commit under `skills/<name>/`. Grok Build’s installer cannot follow root sources, so it installs from this package directory: its skills mirror is refreshed automatically by CI after merge, so contributors still only touch `skills/`.
 
 If you are using the Agent Skills CLI or skills.sh directly, install from the repository root instead:
 
