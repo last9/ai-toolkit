@@ -138,6 +138,8 @@ jobs:
   # check never reports and leaves the PR perpetually pending).
   sync-parity:
     name: Plugin skill sync parity
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

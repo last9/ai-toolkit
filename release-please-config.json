@@ -5,19 +5,7 @@
   "packages": {
     "plugins/last9": {
       "package-name": "last9",
-      "changelog-path": "CHANGELOG.md",
-      "extra-files": [
-        {
-          "type": "json",
-          "path": "../../.claude-plugin/plugin.json",
-          "jsonpath": "$.version"
-        },
-        {
-          "type": "json",
-          "path": "../../.codex-plugin/plugin.json",
-          "jsonpath": "$.version"
-        }
-      ]
+      "changelog-path": "CHANGELOG.md"
     },
     "plugins/opencode-last9": {
       "package-name": "opencode-last9",
