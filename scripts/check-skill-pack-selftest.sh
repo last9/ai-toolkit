@@ -9,7 +9,14 @@ trap 'rm -rf "$SANDBOX"' EXIT
 
 setup_fixture() {
   FIX="$SANDBOX/$1"
-  mkdir -p "$FIX/scripts" "$FIX/.claude-plugin" "$FIX/skills/last9-logs" "$FIX/plugins/opencode-last9"
+  mkdir -p "$FIX/scripts" \
+    "$FIX/.claude-plugin" \
+    "$FIX/.agents/plugins" \
+    "$FIX/.codex-plugin" \
+    "$FIX/.grok-plugin" \
+    "$FIX/skills/last9-logs" \
+    "$FIX/plugins/opencode-last9" \
+    "$FIX/plugins/last9/skills/last9-logs"
   cp "$ROOT_DIR/scripts/check-skill-pack.sh" "$FIX/scripts/"
   cat > "$FIX/plugins/opencode-last9/package.json" <<'PKG'
 {
@@ -21,9 +28,11 @@ setup_fixture() {
 }
 PKG
   printf -- '---\nname: last9-logs\ndescription: x\n---\nbody\n' > "$FIX/skills/last9-logs/SKILL.md"
-  mkdir -p "$FIX/plugins/last9/skills/last9-logs"
   cp "$FIX/skills/last9-logs/SKILL.md" "$FIX/plugins/last9/skills/last9-logs/SKILL.md"
-  printf '{"name":"last9","source":"./","skills":["./skills/"]}' > "$FIX/.claude-plugin/marketplace.json"
+  printf '{"plugins":[{"name":"last9","source":"./","skills":["./skills/"]}]}' > "$FIX/.claude-plugin/marketplace.json"
+  printf '{"plugins":[{"name":"last9","source":{"source":"local","path":"./"}}]}' > "$FIX/.agents/plugins/marketplace.json"
+  printf '{"name":"last9","skills":"./skills/"}' > "$FIX/.codex-plugin/plugin.json"
+  printf '{"name":"last9-ai-toolkit","plugins":[{"name":"last9","source":"./plugins/last9"}]}' > "$FIX/.grok-plugin/marketplace.json"
   (cd "$FIX" && git init -q && git add -A && git -c user.email=t@t -c user.name=t commit -qm base)
 }
 
@@ -34,38 +43,63 @@ expect_fail() {
   fi
 }
 
+commit_fault() {
+  git -C "$FIX" add -A && git -C "$FIX" -c user.email=t@t -c user.name=t commit -qm fault
+}
+
 # Branch 1: frontmatter name != directory name.
 setup_fixture name-mismatch
 printf -- '---\nname: wrong-name\n---\n' > "$FIX/skills/last9-logs/SKILL.md"
-git -C "$FIX" add -A && git -C "$FIX" -c user.email=t@t -c user.name=t commit -qm fault
+commit_fault
 expect_fail "name mismatch"
 
 # Branch 2: manifest declares a skills path that does not exist.
 setup_fixture missing-path
 printf '{"plugins":[{"name":"last9","source":"./","skills":["./nope/"]}]}' > "$FIX/.claude-plugin/marketplace.json"
-git -C "$FIX" add -A && git -C "$FIX" -c user.email=t@t -c user.name=t commit -qm fault
+commit_fault
 expect_fail "missing declared path"
 
 # Branch 3: malformed manifest JSON must fail closed, not silently skip.
 setup_fixture bad-json
 printf '{"name":"last9", broken' > "$FIX/.claude-plugin/marketplace.json"
-git -C "$FIX" add -A && git -C "$FIX" -c user.email=t@t -c user.name=t commit -qm fault
+commit_fault
 expect_fail "malformed manifest JSON"
 
-# Branch 2b: sanctioned Grok mirror drifted from canonical.
+# Branch 4: string-typed skills must not false-pass directory checks.
+setup_fixture string-skills
+printf '{"plugins":[{"name":"last9","source":"./","skills":"./skills/"}]}' > "$FIX/.claude-plugin/marketplace.json"
+commit_fault
+expect_fail "string-typed skills"
+
+# Branch 5: deleting a consumer manifest must fail closed.
+setup_fixture deleted-manifest
+rm "$FIX/.claude-plugin/marketplace.json"
+git -C "$FIX" rm -q .claude-plugin/marketplace.json
+expect_fail "deleted manifest"
+
+# Branch 6: sanctioned Grok mirror drifted from canonical.
 setup_fixture mirror-drift
 printf 'drift' >> "$FIX/plugins/last9/skills/last9-logs/SKILL.md"
-git -C "$FIX" add -A && git -C "$FIX" -c user.email=t@t -c user.name=t commit -qm fault
+commit_fault
 expect_fail "mirror drift"
 
-# Happy path: clean fixture passes.
+# Branch 6b: mirror drift is skippable for contributor PRs.
+if ! SKIP_MIRROR_PARITY=1 sh "$FIX/scripts/check-skill-pack.sh" >/dev/null 2>&1; then
+  echo "selftest FAILED: SKIP_MIRROR_PARITY did not skip drift" >&2
+  exit 1
+fi
+
+# Branch 7: codex plugin skills pointer drift.
+setup_fixture codex-drift
+printf '{"name":"last9","skills":"./wrong/"}' > "$FIX/.codex-plugin/plugin.json"
+commit_fault
+expect_fail "codex pointer drift"
+
+# Happy path: clean fixture passes at full strength.
 setup_fixture happy
-expect_ok() {
-  if ! sh "$FIX/scripts/check-skill-pack.sh" >/dev/null 2>&1; then
-    echo "selftest FAILED: clean fixture expected exit 0" >&2
-    exit 1
-  fi
-}
-expect_ok
+if ! sh "$FIX/scripts/check-skill-pack.sh" >/dev/null 2>&1; then
+  echo "selftest FAILED: clean fixture expected exit 0" >&2
+  exit 1
+fi
 
 echo "check-skill-pack selftests passed"
