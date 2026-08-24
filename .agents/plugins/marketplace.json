@@ -8,7 +8,7 @@
       "name": "last9",
       "source": {
         "source": "local",
-        "path": "./plugins/last9"
+        "path": "./"
       },
       "policy": {
         "installation": "AVAILABLE",

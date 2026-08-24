@@ -1,3 +1,4 @@
 {
-  "plugins/last9": "0.2.0"
+  "plugins/last9": "0.2.0",
+  "plugins/opencode-last9": "0.1.0"
 }

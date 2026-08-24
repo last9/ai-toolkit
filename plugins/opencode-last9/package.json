@@ -1,0 +1,55 @@
+{
+  "name": "opencode-last9",
+  "version": "0.1.0",
+  "description": "Last9 observability for OpenCode: registers the hosted Last9 MCP server (logs, metrics, traces, alerts, deploys) and ships investigation skills.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "files": [
+    "index.ts",
+    "url.ts",
+    "skills",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/last9/ai-toolkit.git",
+    "directory": "plugins/opencode-last9"
+  },
+  "keywords": [
+    "last9",
+    "opencode",
+    "mcp",
+    "observability",
+    "logs",
+    "traces",
+    "metrics",
+    "debugging"
+  ],
+  "author": {
+    "name": "Last9",
+    "url": "https://last9.io"
+  },
+  "homepage": "https://last9.io/mcp",
+  "bugs": {
+    "url": "https://github.com/last9/ai-toolkit/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "prepack": "node scripts/assemble-skills.mjs",
+    "test": "tsx --test test/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}
