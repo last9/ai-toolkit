@@ -1,4 +1,7 @@
 import { strict as assert } from "node:assert"
+import { mkdirSync, rmSync, writeFileSync } from "node:fs"
+import { dirname, resolve } from "node:path"
+import { fileURLToPath } from "node:url"
 import test from "node:test"
 import {
   DEFAULT_HOST,
@@ -7,6 +10,8 @@ import {
   type McpRemoteConfig,
   type OpenCodeConfig,
 } from "../url.ts"
+
+const pkgDir = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 
 // Assemble expected URLs from a base constant: the structural reference scan
 // rejects literal `organizations/<slug>/mcp` shapes in tracked files, even
@@ -74,24 +79,45 @@ test("plugin never clobbers a user-defined last9 entry", async () => {
   assert.equal(config.mcp![MCP_SERVER_NAME], userEntry)
 })
 
-test("plugin skips MCP injection without org or url but still ships skills", async () => {
+test("plugin ships bundled skills only when the generated directory exists", async () => {
   const plugin = await loadPlugin()
-  const config: OpenCodeConfig = {}
-  const hooks1 = await plugin(undefined, {})
-  hooks1.config(config)
-  assert.equal(config.mcp?.[MCP_SERVER_NAME], undefined)
-  const paths = config.skills?.paths ?? []
-  assert.equal(paths.length, 1)
-  assert.match(paths[0]!, /skills\/$/)
+  const hooks = await plugin(undefined, {})
+  const skillsDir = resolve(pkgDir, "skills")
+  try {
+    // Absent (post-clone, pre-pack): skip injection entirely.
+    rmSync(skillsDir, { recursive: true, force: true })
+    const config: OpenCodeConfig = {}
+    hooks.config(config)
+    assert.equal(config.skills, undefined)
+    assert.equal(config.mcp?.[MCP_SERVER_NAME], undefined)
+
+    // Present (created by prepack before packing): path injected once.
+    mkdirSync(resolve(skillsDir, "probe"), { recursive: true })
+    writeFileSync(resolve(skillsDir, "probe/SKILL.md"), "---\nname: probe\n---\n")
+    const config2: OpenCodeConfig = {}
+    hooks.config(config2)
+    const paths = config2.skills?.paths ?? []
+    assert.equal(paths.length, 1)
+    assert.match(paths[0]!, /skills\/$/)
+  } finally {
+    rmSync(skillsDir, { recursive: true, force: true })
+  }
 })
 
 test("plugin does not duplicate the bundled skills path", async () => {
   const plugin = await loadPlugin()
   const config: OpenCodeConfig = {}
   const hooks = await plugin(undefined, {})
-  hooks.config(config)
-  hooks.config(config)
-  assert.equal(config.skills!.paths!.length, 1)
+  const skillsDir = resolve(pkgDir, "skills")
+  try {
+    mkdirSync(resolve(skillsDir, "probe"), { recursive: true })
+    writeFileSync(resolve(skillsDir, "probe/SKILL.md"), "---\nname: probe\n---\n")
+    hooks.config(config)
+    hooks.config(config)
+    assert.equal(config.skills!.paths!.length, 1)
+  } finally {
+    rmSync(skillsDir, { recursive: true, force: true })
+  }
 })
 
 test("plugin entrypoint exports only functions (opencode loader contract)", async () => {

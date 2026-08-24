@@ -43,6 +43,7 @@
     "node": ">=18"
   },
   "scripts": {
+    "prepack": "node scripts/assemble-skills.mjs",
     "test": "tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
