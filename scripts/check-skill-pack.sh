@@ -8,6 +8,14 @@ set -eu
 ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
+# 0. No committed plugin skill copies — mirrors resurrect easily when a
+#    pack-time regeneration runs between staging and committing.
+if [ -n "$(git ls-files 'plugins/*/skills')" ]; then
+  echo "::error::committed plugin skill copies are forbidden (hub model):" >&2
+  git ls-files 'plugins/*/skills' >&2
+  exit 1
+fi
+
 # 1. Frontmatter name must equal the skill directory name. Extract from the
 #    YAML frontmatter block only (between the first two --- delimiters), so a
 #    body line starting "name: " cannot false-fail the gate.
