@@ -8,20 +8,32 @@ set -eu
 ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
-# 1. Frontmatter name must equal the skill directory name.
+# 1. Frontmatter name must equal the skill directory name. Extract from the
+#    YAML frontmatter block only (between the first two --- delimiters), so a
+#    body line starting "name: " cannot false-fail the gate.
 for skill_md in $(git ls-files 'skills/*/SKILL.md'); do
   dir="$(basename "$(dirname "$skill_md")")"
-  expected_name="$(sed -n 's/^name: //p' "$skill_md")"
+  expected_name="$(awk '/^---$/{c++; next} c==1 && /^name: /{sub(/^name: */, ""); print; exit}' "$skill_md")"
   if [ "$expected_name" != "$dir" ]; then
     echo "::error::Skill directory/name mismatch: $skill_md declares name '$expected_name'" >&2
     exit 1
   fi
 done
 
-# 2. Declared marketplace skills paths must exist.
+# 2. Manifests must parse, and declared marketplace skills paths must exist.
+#    A manifest without a skills key is legal (Codex discovers skills
+#    conventionally), but malformed JSON never passes.
 for manifest in .claude-plugin/marketplace.json .agents/plugins/marketplace.json; do
   [ -f "$manifest" ] || continue
-  for path in $(jq -r '.plugins[]?.skills[]?' "$manifest" 2>/dev/null); do
+  jq -e 'type == "object"' "$manifest" >/dev/null || {
+    echo "::error::$manifest is not valid JSON" >&2
+    exit 1
+  }
+  paths="$(jq -r '.plugins[]?.skills[]?' "$manifest")" || {
+    echo "::error::$manifest could not be parsed for skills paths" >&2
+    exit 1
+  }
+  for path in $paths; do
     rel="${path#./}"
     if [ ! -d "$rel" ]; then
       echo "::error::$manifest declares missing skills path: $path" >&2
