@@ -168,13 +168,7 @@ jobs:
         run: |
           # Repo-as-hub model: skills/ is the single source of truth. This
           # check validates distribution correctness (frontmatter naming,
-          # declared marketplace paths, opencode tarball completeness, and
-          # the sanctioned Grok fallback mirror). On PRs the mirror-parity
-          # leg is skipped: contributors touch only skills/, and the
-          # master-push step above refreshes the mirror after merge. The
-          # gate runs at full strength on master pushes, after that refresh.
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            export SKIP_MIRROR_PARITY=1
-          fi
+          # declared marketplace paths, opencode tarball completeness) and
+          # forbids committed plugin skill copies outright.
           scripts/check-skill-pack.sh
           scripts/check-skill-pack-selftest.sh

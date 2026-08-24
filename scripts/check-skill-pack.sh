@@ -11,48 +11,13 @@ set -eu
 ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
-# 0. Committed plugin skill copies are forbidden except the sanctioned
-#    Grok fallback mirror (Grok's installer cannot follow root sources or
-#    symlinks, so it needs real files inside plugins/last9/).
-sanctioned="plugins/last9/skills"
-violations="$(git ls-files 'plugins/*/skills' | grep -v "^$sanctioned/" || true)"
-if [ -n "$violations" ]; then
-  echo "::error::committed plugin skill copies outside the sanctioned Grok fallback:" >&2
-  echo "$violations" >&2
+# 0. Committed plugin skill copies are forbidden — every consumer reads or
+#    assembles from the canonical tree; Grok installs via
+#    `grok plugin install --trust last9/ai-toolkit#plugins/last9`.
+if [ -n "$(git ls-files 'plugins/*/skills/*')" ]; then
+  echo "::error::committed plugin skill copies are forbidden (hub model):" >&2
+  git ls-files 'plugins/*/skills' >&2
   exit 1
-fi
-
-# 0a. The hub must have at least one skill, or every later check is vacuous.
-total_skills="$(git ls-files 'skills/*/SKILL.md' | wc -l | tr -d ' ')"
-if [ "$total_skills" -lt 1 ]; then
-  echo "::error::no tracked skills/*/SKILL.md files found" >&2
-  exit 1
-fi
-
-# 0b. Sanctioned Grok mirror parity. SKIP_MIRROR_PARITY=1 marks the known
-#     PR-time gap: contributors touch only skills/, and the master-push bot
-#     refreshes the mirror after merge.
-for skill_md in $(git ls-files 'skills/*/SKILL.md'); do
-  rel="${skill_md#skills/}"
-  if [ ! -f "$ROOT_DIR/plugins/last9/skills/$rel" ]; then
-    if [ "${SKIP_MIRROR_PARITY:-0}" = "1" ]; then continue; fi
-    echo "::error::Grok fallback mirror missing canonical skill: $rel" >&2
-    exit 1
-  fi
-  cmp -s "$skill_md" "$ROOT_DIR/plugins/last9/skills/$rel" || {
-    if [ "${SKIP_MIRROR_PARITY:-0}" = "1" ]; then continue; fi
-    echo "::error::Grok fallback mirror drifted from canonical: $rel" >&2
-    exit 1
-  }
-done
-if [ "${SKIP_MIRROR_PARITY:-0}" != "1" ]; then
-  for extra in $(git ls-files 'plugins/last9/skills/*'); do
-    rel="${extra#plugins/last9/skills/}"
-    [ -f "$ROOT_DIR/skills/$rel" ] || {
-      echo "::error::Grok fallback mirror has orphaned file: $extra" >&2
-      exit 1
-    }
-  done
 fi
 
 # 1. Frontmatter name must equal the skill directory name. Extract from the
@@ -113,13 +78,8 @@ check_manifest() {
 
 check_manifest .claude-plugin/marketplace.json yes
 check_manifest .agents/plugins/marketplace.json no
-check_manifest .grok-plugin/marketplace.json no
 
-# 2b. The sanctioned Grok mirror's own manifest must point at the mirror.
-jq -e '.plugins[0].source == "./plugins/last9"' .grok-plugin/marketplace.json >/dev/null || {
-  echo "::error::.grok-plugin/marketplace.json must source ./plugins/last9 (the sanctioned mirror)" >&2
-  exit 1
-}
+# 2b. The Codex root plugin manifest must keep pointing at the canonical tree.
 jq -e '.skills == "./skills/"' .codex-plugin/plugin.json >/dev/null || {
   echo "::error::.codex-plugin/plugin.json skills pointer drifted" >&2
   exit 1
