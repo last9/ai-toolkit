@@ -73,8 +73,11 @@ opencode mcp list   # last9 should appear as connected or needs authentication
 npm install
 npm test        # unit tests (tsx --test)
 npm run typecheck
-scripts/sync-agent-plugin-skills.sh  # from repo root: regenerate bundled skills/
+npm pack --dry-run   # regenerates skills/ via prepack, then lists the tarball
 ```
+
+Bundled `skills/` are generated from the repository-root canonical tree by the
+`prepack` hook — never commit that directory.
 
 The plugin entrypoint must export **only functions** — opencode's loader rejects modules with non-function exports.
 
