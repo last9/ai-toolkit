@@ -142,15 +142,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify packaged plugin skills are synced
+      - name: Verify skill distribution
         run: |
-          scripts/sync-agent-plugin-skills.sh
-          # status --porcelain covers modified AND untracked files, so a sync
-          # that creates a new packaged skill file also fails parity until
-          # the file is committed (git diff --exit-code misses untracked).
-          drift=$(git status --porcelain -- plugins/last9/skills plugins/opencode-last9/skills)
-          if [ -n "${drift}" ]; then
-            echo "::error::Packaged plugin skills are out of sync with skills/:"
-            echo "${drift}"
-            exit 1
-          fi
+          # Repo-as-hub model: skills/ is the single source of truth. This
+          # check validates distribution correctness (frontmatter naming,
+          # declared marketplace paths, opencode tarball completeness) —
+          # there are no committed plugin copies to keep in sync.
+          scripts/check-skill-pack.sh
