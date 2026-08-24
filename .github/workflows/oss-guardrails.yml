@@ -146,6 +146,29 @@ jobs:
         run: |
           # Repo-as-hub model: skills/ is the single source of truth. This
           # check validates distribution correctness (frontmatter naming,
-          # declared marketplace paths, opencode tarball completeness) —
-          # there are no committed plugin copies to keep in sync.
+          # declared marketplace paths, opencode tarball completeness, and
+          # the sanctioned Grok fallback mirror) — contributors never sync
+          # by hand.
           scripts/check-skill-pack.sh
+
+      - name: Refresh sanctioned Grok fallback mirror (master only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        run: |
+          # R5 fallback: Grok's installer needs real files under
+          # plugins/last9/skills/. Automation keeps it in sync so
+          # contributors only ever touch skills/.
+          mkdir -p plugins/last9/skills
+          for d in skills/*/; do
+            n=$(basename "$d")
+            mkdir -p "plugins/last9/skills/$n"
+            cp "${d}SKILL.md" "plugins/last9/skills/$n/SKILL.md"
+          done
+          find plugins/last9/skills -type f ! -name SKILL.md -delete
+          find plugins/last9/skills -mindepth 1 -maxdepth 1 -type d ! -exec test -f "{}/SKILL.md" \; -exec rm -rf {} +
+          if ! git diff --quiet -- plugins/last9/skills; then
+            git config user.name "last9-bot"
+            git config user.email "bot@last9.io"
+            git add plugins/last9/skills
+            git commit -m "chore(grok): refresh sanctioned fallback mirror from canonical skills/"
+            git push
+          fi

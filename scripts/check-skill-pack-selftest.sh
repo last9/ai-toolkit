@@ -21,6 +21,8 @@ setup_fixture() {
 }
 PKG
   printf -- '---\nname: last9-logs\ndescription: x\n---\nbody\n' > "$FIX/skills/last9-logs/SKILL.md"
+  mkdir -p "$FIX/plugins/last9/skills/last9-logs"
+  cp "$FIX/skills/last9-logs/SKILL.md" "$FIX/plugins/last9/skills/last9-logs/SKILL.md"
   printf '{"name":"last9","source":"./","skills":["./skills/"]}' > "$FIX/.claude-plugin/marketplace.json"
   (cd "$FIX" && git init -q && git add -A && git -c user.email=t@t -c user.name=t commit -qm base)
 }
@@ -49,6 +51,12 @@ setup_fixture bad-json
 printf '{"name":"last9", broken' > "$FIX/.claude-plugin/marketplace.json"
 git -C "$FIX" add -A && git -C "$FIX" -c user.email=t@t -c user.name=t commit -qm fault
 expect_fail "malformed manifest JSON"
+
+# Branch 2b: sanctioned Grok mirror drifted from canonical.
+setup_fixture mirror-drift
+printf 'drift' >> "$FIX/plugins/last9/skills/last9-logs/SKILL.md"
+git -C "$FIX" add -A && git -C "$FIX" -c user.email=t@t -c user.name=t commit -qm fault
+expect_fail "mirror drift"
 
 # Happy path: clean fixture passes.
 setup_fixture happy
