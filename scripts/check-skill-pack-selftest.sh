@@ -13,10 +13,8 @@ setup_fixture() {
     "$FIX/.claude-plugin" \
     "$FIX/.agents/plugins" \
     "$FIX/.codex-plugin" \
-    "$FIX/.grok-plugin" \
     "$FIX/skills/last9-logs" \
-    "$FIX/plugins/opencode-last9" \
-    "$FIX/plugins/last9/skills/last9-logs"
+    "$FIX/plugins/opencode-last9"
   cp "$ROOT_DIR/scripts/check-skill-pack.sh" "$FIX/scripts/"
   cat > "$FIX/plugins/opencode-last9/package.json" <<'PKG'
 {
@@ -28,11 +26,9 @@ setup_fixture() {
 }
 PKG
   printf -- '---\nname: last9-logs\ndescription: x\n---\nbody\n' > "$FIX/skills/last9-logs/SKILL.md"
-  cp "$FIX/skills/last9-logs/SKILL.md" "$FIX/plugins/last9/skills/last9-logs/SKILL.md"
   printf '{"plugins":[{"name":"last9","source":"./","skills":["./skills/"]}]}' > "$FIX/.claude-plugin/marketplace.json"
   printf '{"plugins":[{"name":"last9","source":{"source":"local","path":"./"}}]}' > "$FIX/.agents/plugins/marketplace.json"
   printf '{"name":"last9","skills":"./skills/"}' > "$FIX/.codex-plugin/plugin.json"
-  printf '{"name":"last9-ai-toolkit","plugins":[{"name":"last9","source":"./plugins/last9"}]}' > "$FIX/.grok-plugin/marketplace.json"
   (cd "$FIX" && git init -q && git add -A && git -c user.email=t@t -c user.name=t commit -qm base)
 }
 
@@ -83,23 +79,6 @@ rm "$FIX/.claude-plugin/marketplace.json"
 git -C "$FIX" rm -q .claude-plugin/marketplace.json
 expect_fail "deleted manifest"
 
-# Branch 6: sanctioned Grok mirror drifted from canonical.
-setup_fixture mirror-drift
-printf 'drift' >> "$FIX/plugins/last9/skills/last9-logs/SKILL.md"
-commit_fault
-expect_fail "mirror drift"
-
-# Branch 6b: mirror drift is skippable for contributor PRs.
-if ! SKIP_MIRROR_PARITY=1 sh "$FIX/scripts/check-skill-pack.sh" >/dev/null 2>&1; then
-  echo "selftest FAILED: SKIP_MIRROR_PARITY did not skip drift" >&2
-  exit 1
-fi
-# And full strength still catches it even when the caller exports the skip.
-if run_full sh "$FIX/scripts/check-skill-pack.sh" >/dev/null 2>&1; then
-  echo "selftest FAILED: drift passed despite env-leak guard" >&2
-  exit 1
-fi
-
 # Branch 7: codex plugin skills pointer drift.
 setup_fixture codex-drift
 printf '{"name":"last9","skills":"./wrong/"}' > "$FIX/.codex-plugin/plugin.json"
@@ -112,5 +91,12 @@ if ! run_full sh "$FIX/scripts/check-skill-pack.sh" >/dev/null 2>&1; then
   echo "selftest FAILED: clean fixture expected exit 0" >&2
   exit 1
 fi
+
+# Committed plugin skill copies must fail (hub invariant).
+setup_fixture committed-copy
+mkdir -p "$FIX/plugins/acme/skills/rogue"
+cp "$FIX/skills/last9-logs/SKILL.md" "$FIX/plugins/acme/skills/rogue/SKILL.md"
+git -C "$FIX" add -A && git -C "$FIX" -c user.email=t@t -c user.name=t commit -qm fault
+expect_fail "committed plugin skill copy"
 
 echo "check-skill-pack selftests passed"

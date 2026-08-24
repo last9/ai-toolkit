@@ -3,10 +3,6 @@
   "release-type": "simple",
   "include-component-in-tag": false,
   "packages": {
-    "plugins/last9": {
-      "package-name": "last9",
-      "changelog-path": "CHANGELOG.md"
-    },
     "plugins/opencode-last9": {
       "package-name": "opencode-last9",
       "changelog-path": "CHANGELOG.md",

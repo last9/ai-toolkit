@@ -138,45 +138,15 @@ jobs:
   # check never reports and leaves the PR perpetually pending).
   sync-parity:
     name: Plugin skill sync parity
-    permissions:
-      contents: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Refresh sanctioned Grok fallback mirror (master only)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-        run: |
-          # R5 fallback: Grok's installer needs real files under
-          # plugins/last9/skills/. Automation keeps it in sync so
-          # contributors only ever touch skills/. Regenerate from scratch so
-          # orphans cannot survive, then verify.
-          rm -rf plugins/last9/skills
-          mkdir -p plugins/last9/skills
-          for d in skills/*/; do
-            n=$(basename "$d")
-            mkdir -p "plugins/last9/skills/$n"
-            cp "${d}SKILL.md" "plugins/last9/skills/$n/SKILL.md"
-          done
-          if ! git diff --quiet -- plugins/last9/skills; then
-            git config user.name "last9-bot"
-            git config user.email "bot@last9.io"
-            git add plugins/last9/skills
-            git commit -m "chore(grok): refresh sanctioned fallback mirror from canonical skills/"
-            git push
-          fi
 
       - name: Verify skill distribution
         run: |
           # Repo-as-hub model: skills/ is the single source of truth. This
           # check validates distribution correctness (frontmatter naming,
-          # declared marketplace paths, opencode tarball completeness, and
-          # the sanctioned Grok fallback mirror). On PRs the mirror-parity
-          # leg is skipped: contributors touch only skills/, and the
-          # master-push step above refreshes the mirror after merge. The
-          # gate runs at full strength on master pushes, after that refresh.
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            export SKIP_MIRROR_PARITY=1
-          fi
+          # declared marketplace paths, opencode tarball completeness) and
+          # forbids committed plugin skill copies outright.
           scripts/check-skill-pack.sh
           scripts/check-skill-pack-selftest.sh

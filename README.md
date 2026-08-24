@@ -30,7 +30,11 @@ npx skills add last9/ai-toolkit --skill last9-logs
 npx skills add last9/ai-toolkit -a claude-code
 ```
 
-Claude Code, Codex, and Grok Build users can install through their plugin marketplaces instead — all three read the same root-level manifests (`.claude-plugin/marketplace.json`, `.agents/plugins/marketplace.json`) and resolve skills directly from this repository's canonical `skills/` tree; there are no packaged copies to keep in sync.
+Claude Code and Codex install through their marketplaces, which resolve skills directly from this repository's canonical `skills/` tree. Grok Build installs straight from the plugin subdirectory:
+
+```shell
+grok plugin install --trust "last9/ai-toolkit#plugins/last9"
+```
 
 OpenCode users get MCP registration plus skills from a single plugin:
 
