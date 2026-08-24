@@ -1,6 +1,6 @@
 {
   "name": "opencode-last9",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Last9 observability for OpenCode: registers the hosted Last9 MCP server (logs, metrics, traces, alerts, deploys) and ships investigation skills.",
   "license": "MIT",
   "type": "module",
