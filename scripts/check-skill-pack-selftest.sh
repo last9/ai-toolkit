@@ -36,8 +36,14 @@ PKG
   (cd "$FIX" && git init -q && git add -A && git -c user.email=t@t -c user.name=t commit -qm base)
 }
 
+# Full-strength invocation: pin the environment so a caller's exported
+# SKIP_MIRROR_PARITY (CI sets it on PRs) cannot leak into these cases.
+run_full() {
+  env -u SKIP_MIRROR_PARITY "$@"
+}
+
 expect_fail() {
-  if sh "$FIX/scripts/check-skill-pack.sh" >/dev/null 2>&1; then
+  if run_full sh "$FIX/scripts/check-skill-pack.sh" >/dev/null 2>&1; then
     echo "selftest FAILED: $1 expected exit 1, got 0" >&2
     exit 1
   fi
@@ -88,6 +94,11 @@ if ! SKIP_MIRROR_PARITY=1 sh "$FIX/scripts/check-skill-pack.sh" >/dev/null 2>&1;
   echo "selftest FAILED: SKIP_MIRROR_PARITY did not skip drift" >&2
   exit 1
 fi
+# And full strength still catches it even when the caller exports the skip.
+if run_full sh "$FIX/scripts/check-skill-pack.sh" >/dev/null 2>&1; then
+  echo "selftest FAILED: drift passed despite env-leak guard" >&2
+  exit 1
+fi
 
 # Branch 7: codex plugin skills pointer drift.
 setup_fixture codex-drift
@@ -97,7 +108,7 @@ expect_fail "codex pointer drift"
 
 # Happy path: clean fixture passes at full strength.
 setup_fixture happy
-if ! sh "$FIX/scripts/check-skill-pack.sh" >/dev/null 2>&1; then
+if ! run_full sh "$FIX/scripts/check-skill-pack.sh" >/dev/null 2>&1; then
   echo "selftest FAILED: clean fixture expected exit 0" >&2
   exit 1
 fi
