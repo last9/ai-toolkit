@@ -25,7 +25,12 @@ if (!out) {
 
 mkdirSync(dest, { recursive: true })
 for (const rel of out.split("\n")) {
-  const name = rel.split("/")[1]
+  const segs = rel.split("/")
+  if (segs.length !== 3) {
+    console.error(`assemble-skills: unexpected path depth '${rel}' — expected skills/<name>/SKILL.md`)
+    process.exit(1)
+  }
+  const name = segs[1]
   mkdirSync(resolve(dest, name), { recursive: true })
   cpSync(resolve(repoRoot, rel), resolve(dest, name, "SKILL.md"))
 }
