@@ -1,6 +1,6 @@
 # Last9 for OpenCode
 
-[![npm version](https://img.shields.io/npm/v/opencode-last9.svg)](https://www.npmjs.com/package/opencode-last9)
+[![npm version](https://img.shields.io/npm/v/@last9/opencode-plugin.svg)](https://www.npmjs.com/package/@last9/opencode-plugin)
 
 Connect [OpenCode](https://opencode.ai) to your Last9 production telemetry — logs, metrics, traces, exceptions, database queries, alerts, and deployments — through the hosted [Last9 MCP server](https://last9.io/mcp/). Ships the Last9 investigation skills so your agent knows which query to write, not just how to write one.
 
@@ -11,7 +11,7 @@ Add the plugin to your `opencode.json` with your org slug (the part after `app.l
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": [["opencode-last9", { "org": "<org-slug>" }]]
+  "plugin": [["@last9/opencode-plugin", { "org": "<org-slug>" }]]
 }
 ```
 
@@ -26,7 +26,7 @@ Your browser opens, you approve, done. Tokens are stored securely and refreshed 
 Prefer environment variables? Skip the options tuple:
 
 ```json
-{ "plugin": ["opencode-last9"] }
+{ "plugin": ["@last9/opencode-plugin"] }
 ```
 
 ```shell

@@ -4,7 +4,7 @@ export const MCP_SERVER_NAME = "last9"
 /**
  * Options accepted via the tuple form in opencode.json:
  *
- *   "plugin": [["opencode-last9", { "org": "<org-slug>" }]]
+ *   "plugin": [["@last9/opencode-plugin", { "org": "<org-slug>" }]]
  */
 export interface Last9PluginOptions {
   /** Your Last9 org slug (the part after app.last9.io/ in your browser URL). */
