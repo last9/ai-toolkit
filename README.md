@@ -47,6 +47,14 @@ OpenCode users get MCP registration plus skills from a single plugin:
 
 Then run `opencode mcp auth last9` once to authenticate. See [`plugins/opencode-last9/`](plugins/opencode-last9/) for details.
 
+[Orca](https://github.com/stablyai/orca) has no plugin format of its own — it orchestrates Claude Code and Codex workers, and those workers read skills from their usual directories. Install for the agents Orca drives:
+
+```shell
+npx skills add last9/ai-toolkit -g --agent claude-code --agent codex --agent universal
+```
+
+`--agent universal` writes to `~/.config/agents/skills/`, which Orca also reads. Note that `orca skills install` resolves only Orca's own bundled skills, so it cannot install this repository.
+
 ## Connecting to Last9
 
 Last9 MCP is hosted, so there is no local server to run. Point your agent's MCP config at your organization's endpoint. For Codex:
