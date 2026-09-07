@@ -102,9 +102,9 @@ For “show CPU and read latency for this database over this interval”:
 
 An empty recent lookup for BucketSizeBytes or NumberOfObjects does not establish zero, deletion, or a stopped stream. These are [daily S3 storage metrics](https://docs.aws.amazon.com/AmazonS3/latest/userguide/metrics-dimensions.html), distinct from request metrics. AWS documents a [daily period and Average statistic](https://docs.aws.amazon.com/AmazonS3/latest/userguide/cloudwatch-monitoring-accessing.html) for viewing them.
 
-Discover the actual bucket and storage-type dimensions. Read bounded history spanning the daily cadence, such as the last three days, and inspect the timestamps of actual samples. Keep this diagnostic history separate from the interval the user asked about. Distinguish a numeric zero, a last known observation, and no observation in the requested interval. Do not claim that a `last_over_time()` result's evaluation timestamp is the original publication time; use raw sample timestamps to establish the age.
+Discover the actual bucket and storage-type dimensions. Read bounded history spanning the daily cadence, such as the last three days, and inspect the timestamps of actual samples. Keep this diagnostic history separate from the interval the user asked about. Distinguish a numeric zero, a last known observation, and no observation in the requested interval. Do not claim that a `last_over_time()` result's evaluation timestamp is the original publication time; use raw sample timestamps to establish the age. Preserve the exact returned timestamp: copy raw Unix seconds when needed, or verify the UTC conversion with an available tool. Do not round it to a date or midnight.
 
-If expected history is also empty, verify the datasource, filters, source configuration, statistic, and publication cadence before attributing the gap to ingestion. Use available read-only delivery evidence when present. If it is absent, report that whether delivery stopped remains unconfirmed. Do not infer an exact next publication time from “daily.”
+If expected history is also empty, verify the datasource, filters, source configuration, statistic, and publication cadence before attributing the gap to ingestion. Use available read-only delivery evidence when present. If it is absent, report that whether delivery stopped remains unconfirmed. Do not infer the next publication date or time from “daily” or from the previous sample.
 
 ## Metric availability and Discover visibility
 
@@ -112,7 +112,7 @@ A resource can have queryable CloudWatch metrics without appearing in a particul
 
 ## Report the evidence
 
-For each requested measurement, give the value and unit or **unavailable**, the AWS resource and dimension level, datasource and UTC interval, selected source/statistic, and the exact executed query with its returned evidence or tool-call reference. Separate observations from explanations and unresolved causes. Report partial coverage, last-known sample times, and any unsupported requested statistic explicitly; check that the prose arithmetic agrees with the samples and the stated result.
+For each requested measurement, preserve the user's requested output name and give the value and unit or **unavailable**, the AWS resource and dimension level, datasource and UTC interval, selected source/statistic, and the exact executed query with its returned evidence or tool-call reference. Cite all operands actually used, including both Sum and SampleCount when computing an average. Separate observations from explanations and unresolved causes. Report partial coverage, last-known sample times, and any unsupported requested statistic explicitly; check that the prose arithmetic agrees with the samples and the stated result.
 
 For an ingestion-versus-UI question, state what the metric query established and what remains unknown about discovery. Link the [Last9 metric explorer](https://app.last9.io/metrics) when useful.
 
