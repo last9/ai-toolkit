@@ -12,6 +12,7 @@ Establish Valkey, Redis OSS, or Memcached and node-based versus serverless deplo
 - `BytesUsedForCache` and `FreeableMemory` are byte levels; `CurrConnections` is a connection level. `Evictions`, `Reclaimed`, `CacheHits`, and `CacheMisses` describe distinct events. Use verified period Sums for event totals, not SampleCount or a peak statistic.
 - `CacheHitRate` is a percentage. Do not average node percentages into a fleet hit ratio without request weights; matched hit/miss totals can support the ratio when their populations and periods agree.
 - `ReplicationLag` is documented in seconds. `SuccessfulReadRequestLatency`, `SuccessfulWriteRequestLatency`, and command-family latency such as `GetTypeCmdsLatency` are microseconds. `DurabilityLag` and `DB0AverageTTL` are milliseconds. Check the exact metric/engine definition before converting; display requirements do not change source units.
+- `GetTypeCmds` and `GetTypeCmdsLatency` cover read-only commands across data types; AWS examples include `GET`, `HGET`, `SCARD`, and `LRANGE`. Command groups overlap: `LRANGE` also belongs to `ListBasedCmds`. Do not add these groups as disjoint populations or infer command exclusions from a metric name.
 
 ## Answer an engine CPU or latency request
 
