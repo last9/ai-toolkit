@@ -1,6 +1,6 @@
 ---
 name: last9-cloudwatch
-description: Investigate AWS CloudWatch metrics in Last9 through read-only MCP queries. Use for CloudWatch metric discovery, RDS or Aurora resource metrics, CloudWatch statistics and units, or sparse S3 daily metrics ("CloudWatch in Last9", "RDS CPU", "Aurora latency", "S3 metric is empty").
+description: Investigate AWS CloudWatch metrics in Last9 with read-only MCP queries. Covers Billing, RDS/Aurora, ElastiCache, MSK, DynamoDB, EC2, SQS, DMS, KMS, and S3. Discover resource metrics, interpret statistics and units, and distinguish sparse data from missing delivery.
 compatibility: Requires the Last9 MCP server connected to the session
 metadata:
   author: last9
@@ -17,6 +17,23 @@ Use the authenticated [Last9 MCP server](https://github.com/last9/last9-mcp-serv
 Establish the connected organization, selected datasource, AWS account, region, resource, and UTC bounds. Use `list_datasources` if unresolved; carry the selection into every call regardless of defaults. Resolve relative times once with an available clock. Datasource/integration configuration can establish account/region without labels; cite that evidence. Resolve ambiguous scope before combining data; never substitute an accessible organization for the intended one.
 
 If tools are missing, use sufficient supplied observations or report the capability gap. Mark unexecuted queries; never invent results.
+
+## Choose the AWS family
+
+Before family-specific discovery or queries, read the matching reference. For a task spanning multiple families, load only those matching references. Namespace names below are discovery hints, not guaranteed ingested names or label spellings. Use the shared rules below for every source.
+
+| Family | Namespace hint | Read when investigating |
+|---|---|---|
+| [Billing](references/billing.md) | `AWS/Billing` or a verified cost exporter | Estimated charges, currency, service and linked-account cost scope |
+| [RDS / Aurora](references/rds-aurora.md) | `AWS/RDS` | Instance versus cluster/role metrics, CPU, latency, replication |
+| [ElastiCache](references/elasticache.md) | `AWS/ElastiCache` | Cache node identity, engine versus host CPU, hits, evictions, lag |
+| [MSK](references/msk.md) | `AWS/Kafka` | Broker versus topic/consumer-group metrics, throughput, consumer lag |
+| [DynamoDB](references/dynamodb.md) | `AWS/DynamoDB` | Table/index/account scope, consumed capacity, throttling, latency |
+| [EC2](references/ec2.md) | `AWS/EC2` | Instance CPU, period network bytes, status checks, credit balances |
+| [SQS](references/sqs.md) | `AWS/SQS` | Approximate backlog and age, message-operation counts, inactive queues |
+| [DMS](references/dms.md) | `AWS/DMS` | Replication task versus instance, source/target CDC latency |
+| [KMS](references/kms.md) | `AWS/KMS` | Operation counts, key material expiration, metric applicability |
+| [S3](references/s3.md) | `AWS/S3` | Daily storage versus request metrics, last-known versus current |
 
 ## Tool reference
 
@@ -83,25 +100,9 @@ The period ratio needs one-to-one companion matching. The window ratio additiona
 
 Inspect raw times using `<metric>{<verified-scope>}[<window>]` through `prometheus_instant_query` at the fixed end. Use verified raw-selector bounds and sample timestamps for window membership; do not contradict them with unverified UTC conversions. Membership alone does not establish complete period coverage. Check result type and timestamp meaning: source observation times need original samples. Vector tuples and chart points can carry evaluation times or repeat earlier observations. Missing periods, duplicates, late data, misaligned boundaries, or unknown timestamp semantics limit totals/averages; report supported coverage instead of filling gaps with zero.
 
-## Worked example: RDS or Aurora CPU and read latency
-
-Resolve account, region, and database dimensions. For Aurora, choose instance, cluster, or role: AWS publishes [different dimension combinations](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/dimensions.html), so selecting every row with a cluster name can overlap resources.
-
-Discover CPUUtilization and ReadLatency families, batch their companion reads, and verify source, labels, timestamps, and units. For stream summaries, use the latest companion pair for requested period averages; use the weighted template only for a requested window average with verified coverage. Report each metric's aggregation level separately.
-
-[RDS metrics](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/rds-metrics.html) define CPUUtilization in Percent and ReadLatency in seconds. Confirm ingestion mapping before converting latency to milliseconds by multiplying by 1,000. Enhanced Monitoring and similarly named exporters can differ in units/definitions. Period latency averages or percentiles cannot establish whole-window percentiles without distributions or equivalent raw observations.
-
-## Sparse S3 storage: last-known is not current
-
-BucketSizeBytes and NumberOfObjects are [daily storage metrics](https://docs.aws.amazon.com/AmazonS3/latest/userguide/metrics-dimensions.html), distinct from request metrics; AWS documents a [daily period and Average statistic](https://docs.aws.amazon.com/AmazonS3/latest/userguide/cloudwatch-monitoring-accessing.html). An empty recent lookup does not establish zero, deletion, or a stopped stream.
-
-Discover bucket/storage-type dimensions. Inspect bounded raw history spanning the cadence (for example, three days), separately from the user's requested interval. Distinguish numeric zero, last-known value with original timestamp, and no observation in the requested interval.
-
-**Daily cadence does not make an old sample current.** A historical query interval is not a freshness requirement unless the user explicitly makes it one. Honor a user-specified freshness window; otherwise probe each raw companion at the requested end time, separately from widened history. Do not invent a production freshness threshold. Widened history or a historical `last_over_time()` result cannot establish currentness; its evaluation time is not source publication time. If the observations do not establish currentness, report current **unavailable** and the last-known value separately.
+Keep **last-known** and **current** separate. A historical query interval is not a freshness requirement unless the user explicitly makes it one. Honor a user-specified freshness window; otherwise probe each raw companion at the requested end time, separately from widened history. Do not invent a production freshness threshold. Widened history or a historical `last_over_time()` result cannot establish currentness; its evaluation time is not source publication time. If the observations do not establish currentness, report current **unavailable** and the last-known value separately.
 
 Preserve exact returned Unix seconds. Verify UTC conversion and any age calculation with a reliable available tool; otherwise report the epoch only and omit converted dates/times and computed ages. `vector(epoch)` merely echoes a number, not a verified time conversion. Never round a source timestamp to a date or midnight.
-
-If history is empty, verify datasource, filters, configuration, statistic, and cadence before blaming ingestion. Without read-only delivery evidence, whether delivery stopped remains unconfirmed. Neither “daily” nor the previous sample establishes the next publication time **or that a newer publication has not arrived**.
 
 ## Report evidence and separate Discover identity
 
