@@ -81,7 +81,7 @@ sum(sum_over_time(<count-metric>{<verified-scope>}[<window>]))
 
 The period ratio needs one-to-one companion matching. The window ratio additionally needs disjoint reports, matching populations/periods, and positive total SampleCount. Do not hide unexplained mismatches by dropping labels or convert a missing/zero denominator into zero latency or utilization.
 
-Inspect raw times using `<metric>{<verified-scope>}[<window>]` through `prometheus_instant_query` at the fixed end. Check result type and timestamp meaning: source observation times need original samples. Vector tuples and chart points can carry evaluation times or repeat earlier observations. Missing periods, duplicates, late data, misaligned boundaries, or unknown timestamp semantics limit totals/averages; report supported coverage instead of filling gaps with zero.
+Inspect raw times using `<metric>{<verified-scope>}[<window>]` through `prometheus_instant_query` at the fixed end. Use verified raw-selector bounds and sample timestamps for window membership; do not contradict them with unverified UTC conversions. Membership alone does not establish complete period coverage. Check result type and timestamp meaning: source observation times need original samples. Vector tuples and chart points can carry evaluation times or repeat earlier observations. Missing periods, duplicates, late data, misaligned boundaries, or unknown timestamp semantics limit totals/averages; report supported coverage instead of filling gaps with zero.
 
 ## Worked example: RDS or Aurora CPU and read latency
 
@@ -97,7 +97,7 @@ BucketSizeBytes and NumberOfObjects are [daily storage metrics](https://docs.aws
 
 Discover bucket/storage-type dimensions. Inspect bounded raw history spanning the cadence (for example, three days), separately from the user's requested interval. Distinguish numeric zero, last-known value with original timestamp, and no observation in the requested interval.
 
-**Daily cadence does not make an old sample current.** Honor a user-specified freshness window; otherwise probe each raw companion at the requested end time, separately from widened history. Do not invent a production freshness threshold. Widened history or a historical `last_over_time()` result cannot establish currentness; its evaluation time is not source publication time. If the observations do not establish currentness, report current **unavailable** and the last-known value separately.
+**Daily cadence does not make an old sample current.** A historical query interval is not a freshness requirement unless the user explicitly makes it one. Honor a user-specified freshness window; otherwise probe each raw companion at the requested end time, separately from widened history. Do not invent a production freshness threshold. Widened history or a historical `last_over_time()` result cannot establish currentness; its evaluation time is not source publication time. If the observations do not establish currentness, report current **unavailable** and the last-known value separately.
 
 Preserve exact returned Unix seconds. Verify UTC conversion and any age calculation with a reliable available tool; otherwise report the epoch only and omit converted dates/times and computed ages. `vector(epoch)` merely echoes a number, not a verified time conversion. Never round a source timestamp to a date or midnight.
 
