@@ -6,45 +6,40 @@ metadata:
   author: last9
 ---
 
-# last9-cloudwatch — investigate CloudWatch metrics in Last9
+# last9-cloudwatch
 
-**Operating principle: establish the resource and the published statistic before choosing the calculation.** CloudWatch metrics can describe AWS resources without an application service, environment label, or APM instrumentation. Start with the requested AWS population; do not require traces to query its infrastructure metrics.
+**Establish resource and statistic before calculating.** CloudWatch needs no application service, environment label, or APM instrumentation.
 
 ## Prerequisites and scope
 
-Use the authenticated [Last9 MCP server](https://github.com/last9/last9-mcp-server) and its advertised tool schemas. This workflow reads existing telemetry. Creating streams, changing AWS permissions, configuring collectors, generating Terraform, and building dashboards are separate tasks.
+Use the authenticated [Last9 MCP server](https://github.com/last9/last9-mcp-server) for read-only queries. AWS/collector changes, Terraform, and dashboards are separate tasks.
 
-Confirm the connected organization and selected datasource from the conversation and available connection or datasource information. Call `list_datasources` when selection is not already established. Carry the selected datasource into every discovery and query call; a different default is not a reason to change the user's selection. If the connection cannot access the intended organization, report that boundary before querying another one.
+Establish the connected organization, selected datasource, AWS account, region, resource, and UTC bounds. Use `list_datasources` if unresolved; carry the selection into every call regardless of defaults. Resolve relative times once with an available clock. Datasource/integration configuration can establish account/region without labels; cite that evidence. Resolve ambiguous scope before combining data; never substitute an accessible organization for the intended one.
 
-Pin the AWS account, region, resource, and UTC start/end times. Resolve relative times against an available clock once and reuse those bounds for comparisons. Discover the actual dimension keys before inserting filters. Account or region may be established by a dedicated datasource or integration configuration instead of a series label; state that evidence. If scope remains ambiguous, surface the available choices and resolve it before combining measurements.
-
-If the needed tools are unavailable, explain the missing connection or capability. Analyze supplied observations when sufficient, but identify proposed queries as unexecuted. Never present invented calls or results as evidence.
+If tools are missing, use sufficient supplied observations or report the capability gap. Mark unexecuted queries; never invent results.
 
 ## Tool reference
 
-Read the live descriptions first; these are the relevant parameter shapes, not a replacement for the installed schemas.
+Installed schemas take precedence over this reference:
 
-| Tool | Use | Parameters |
-|---|---|---|
-| `list_datasources` | Resolve the datasource | Use its advertised schema |
-| `prometheus_label_values` | Discover metric names or dimension values | `label`, `match_query`, `datasource`, `start_time_iso`, `end_time_iso` |
-| `prometheus_labels` | Discover label names for a selector | `match_query`, `datasource`, `start_time_iso`, `end_time_iso` |
-| `prometheus_instant_query` | Evaluate an expression at a fixed time, or read a raw range selector | `query`, `datasource`, `time_iso` |
-| `prometheus_range_query` | Inspect an expression over the requested interval | `query`, `datasource`, `start_time_iso`, `end_time_iso` |
+| Tool | Relevant parameters |
+|---|---|
+| `list_datasources` | Advertised schema |
+| `prometheus_label_values` | `label`, `match_query`, `datasource`, `start_time_iso`, `end_time_iso` |
+| `prometheus_labels` | `match_query`, `datasource`, `start_time_iso`, `end_time_iso` |
+| `prometheus_instant_query` | `query`, `datasource`, `time_iso` |
+| `prometheus_range_query` | `query`, `datasource`, `start_time_iso`, `end_time_iso` |
 
-Use `label: "__name__"` for metric-name discovery. These query tools do not expose a `step` parameter in this interface; do not invent one. Preserve the distinction between a raw range selector evaluated once and a chart expression evaluated repeatedly.
+Discover names with `label: "__name__"`. Do not invent a `step` parameter. Distinguish raw range selectors evaluated once from repeatedly evaluated charts.
 
-## Discover, verify, then calculate
+## Discover and execute efficiently
 
-1. **Find candidate names.** Search the selected datasource and time window for the requested AWS namespace or metric. The [CloudWatch integration guide](https://last9.io/docs/integrations/observability/aws-cloudwatch-metrics/) documents the `amazonaws_com_AWS` prefix for its stream path; use it as a discovery hint, not a universal name contract. Exporters and other ingestion paths can use different names. A missing result under one prefix is not proof that the resource has no metrics.
-2. **Inspect dimensions and actual samples.** Discover label names and relevant values, then execute a narrow selector for the chosen account, region, and resource. A catalog entry proves discoverability, not current delivery. `prometheus_labels` may return a generic catalog even with `match_query`; if it does, state that limitation and inspect a bounded candidate metric query's actual returned label keys. Inspect returned series labels and raw timestamps before trusting a filter or interpreting emptiness. Do not add `service_name`, `env`, `namespace`, or a guessed AWS dimension simply because it appears on another metric.
-3. **Identify lineage and one dimension level.** Distinguish CloudWatch Metric Streams, exporters, and trace-derived metrics using integration information and observed series. Preserve valid mixed configurations. Keep sources separate until their populations, periods, and definitions justify combining them; overlapping copies cannot be added. Similarly, choose instance, cluster, or role aggregation deliberately. Removing labels with `sum by (...)` after selecting overlapping rows does not remove double counting.
-4. **Establish the measurement contract.** Record the AWS metric, unit, statistic, publication period, timestamp meaning, and coverage. Check whether a sample is a period summary, instantaneous gauge, or cumulative counter. Establish units from the AWS metric definition and the ingestion mapping; a unit label is not guaranteed, and magnitude alone is not evidence. Follow the current integration guide and verify additional statistics and the actual ingestion format when relevant; do not infer a permanent format-version requirement from an old example. If dimensions appear only as an opaque encoded value, report the observed shape and the missing resource-level selection capability; do not invent direct label keys or recreate the stream.
-5. **Execute the required calculation.** Build queries from discovered names and verified selectors. Execute them with the pinned datasource and times, inspect results, and cross-check units and arithmetic. If the inputs cannot support the requested statistic, return it as unavailable and name the evidence needed next.
+1. **Find names and inspect samples.** The [integration guide](https://last9.io/docs/integrations/observability/aws-cloudwatch-metrics/) documents `amazonaws_com_AWS` for its stream path. Treat it as a discovery hint: exporters can use other names. Missing one prefix does not prove missing resource metrics. Discover dimensions, then execute a bounded selector. Catalog membership proves discoverability, not delivery. `prometheus_labels` may return generic keys even with `match_query`; state that limitation and use actual returned series labels. Do not invent `service_name`, `env`, `namespace`, or AWS dimensions from another metric's catalog.
+2. **Verify lineage and population.** Distinguish Metric Streams, exporters, and traces using integration information and observed series. Preserve valid mixed sources; combine only when definitions, periods, and populations justify it. Choose instance, cluster, or role scope deliberately. Removing labels after selecting overlapping copies or rollups does not remove double counting.
+3. **Establish semantics.** Identify the metric, unit, statistic, period, timestamp meaning, and coverage; distinguish period summaries, gauges, and cumulative counters. Use AWS definitions and ingestion mapping for units, not magnitude or an assumed unit label. Check the current guide and observed format/additional statistics rather than imposing a historical format version. If dimensions are opaque encoded values, report the resource-selection limitation; do not invent direct keys or recreate the stream.
+4. **Batch independent reads and reuse evidence.** Once scopes are known, batch companion Sum/Count reads and independent discovery across requested metrics. Reuse verified names, labels, raw samples, and calculations at the same scope/time. Skip redundant catalog lookups and extra calculations: a latest-period request does not need a separate weighted window average. Execute the required expression or derive the requested result from returned raw operands, check arithmetic and units, then report as soon as the requested measurements are supported. If support is unavailable, report the gap and needed evidence instead of expanding the investigation.
 
-Keep query outcomes distinct: a successful empty result means the executed expression returned no values, while an explicit numeric zero is a measurement. An empty derived expression, such as `_sum / _count`, does not prove that raw observations are missing. Query each raw operand with the same verified scope and window before claiming no recent data; check for missing samples, zero or invalid denominators, and vector-matching label differences. An invalid query, authentication failure, or timeout establishes neither zero nor absence. Correct invalid arguments or expressions using the actual schema and discovered names, then retry the scoped read; otherwise report the blocking error rather than treating it as absence.
-
-Discovery example for an RDS investigation, after substituting the selected datasource and UTC bounds:
+`prometheus_label_values` example: substitute datasource/UTC bounds and add verified resource filters.
 
 ```json
 {
@@ -56,23 +51,23 @@ Discovery example for an RDS investigation, after substituting the selected data
 }
 ```
 
-This is input to `prometheus_label_values`, not a query result. Narrow discovery further with already-verified resource filters. Use returned metric names in the subsequent label and sample reads.
+## Query outcomes and statistics
 
-## Statistics and calculation guardrails
+A successful empty expression returned no values; an explicit numeric zero is a measurement. An empty ratio does **not** prove missing raw observations. Inspect each raw operand at the same verified scope/window for absent samples, zero or invalid denominators, and vector-matching differences. Invalid queries, authentication failures, and timeouts establish neither zero nor absence. Repair invalid arguments/expressions using the actual schema and discovered names, retry the scoped read, or report the blocking error.
 
-[CloudWatch Metric Streams](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch-Metric-Streams.html) carry period statistics including Sum and SampleCount; additional statistics can be configured. The [OpenTelemetry translation](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch-metric-streams-formats-opentelemetry-translation.html) explains the summary mapping. Verify that mapping for the series being queried before applying these recipes.
+[Metric Streams](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch-Metric-Streams.html) carry period Sum and SampleCount plus configurable statistics. Verify the series' [summary mapping](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch-metric-streams-formats-opentelemetry-translation.html) before using these recipes:
 
-| Observed measurement | Interpretation and calculation |
+| Observed measurement | Calculation and guardrail |
 |---|---|
-| Confirmed stream-summary `_sum` and `_count` companions | Period Sum and SampleCount. `_sum / _count` gives the period's sample average when labels, period, and population match and count is positive. `_count` counts observations; it is not automatically a request count. |
-| Several confirmed, disjoint period summaries | A sample-weighted window average is total Sum divided by total SampleCount. Averaging the period averages is wrong when counts differ. Verify coverage and boundaries before claiming a whole-window result. |
-| An AWS metric whose Sum counts events | Add disjoint period Sums for an event total; divide by covered elapsed seconds for average events/sec only with the required complete coverage. Establish this from the metric's definition, not its suffix. |
-| A gauge such as storage size or resource utilization | Report the requested level or a clearly defined aggregate. Summing observations over time does not give total storage or total utilization. |
-| A verified cumulative exporter counter | `rate()` or `increase()` may apply with suitable history and reset handling. Do not transfer that treatment to CloudWatch period-summary companions because their names end in `_sum` or `_count`. |
-| Observed minimum, maximum, or percentile series | Select the actual statistic label, including `quantile` where present. A maximum of period p99s is the peak period p99; it cannot establish a whole-window p99. Do not run `histogram_quantile()` on already-quantiled values. |
-| Instance rows plus cluster, role, or other rollup rows | Select a non-overlapping population at one intended dimension level. Never sum both an aggregate and its constituent resources. |
+| Confirmed `_sum` / `_count` companions | Period Sum / SampleCount is the sample average when labels, period, and population match and count is positive. SampleCount counts observations, not automatically requests. |
+| Disjoint period summaries | Window average = total Sum / total SampleCount. Averaging period averages is wrong when counts differ. Whole-window claims require matching coverage and boundaries. |
+| Metric whose Sum counts events | Add disjoint period Sums; divide by elapsed seconds for average events/sec only with complete coverage. Establish event semantics from the metric definition, not its suffix. |
+| Gauge: storage or utilization | Report the requested level or defined aggregate. Adding observations over time is not total storage or utilization. |
+| Verified cumulative exporter counter | `rate()` / `increase()` may apply with sufficient history and reset handling. Never apply them to period summaries merely because of `_sum` / `_count` suffixes. |
+| Minimum, maximum, percentile | Select the actual statistic label (`quantile` if present). Maximum period p99 is peak period p99, not whole-window p99. Do not apply `histogram_quantile()` to already-quantiled values. |
+| Instance, cluster, role, or other rollups | Select one non-overlapping population; never add an aggregate and its constituents. |
 
-For a confirmed summary family, the following are **templates**. Replace metric names, selectors, and window with observed values before execution:
+For verified summaries, substitute observed names, selectors, and window:
 
 ```promql
 <sum-metric>{<verified-scope>} / <count-metric>{<verified-scope>}
@@ -84,38 +79,36 @@ sum(sum_over_time(<sum-metric>{<verified-scope>}[<window>]))
 sum(sum_over_time(<count-metric>{<verified-scope>}[<window>]))
 ```
 
-The first expression needs one-to-one matching companion labels. The second additionally needs matching populations and periods, positive total SampleCount, and raw samples representing disjoint reports. Do not add arbitrary label-dropping modifiers to make an unexplained mismatch disappear. Do not silently turn a zero or missing denominator into zero utilization or latency.
+The period ratio needs one-to-one companion matching. The window ratio additionally needs disjoint reports, matching populations/periods, and positive total SampleCount. Do not hide unexplained mismatches by dropping labels or convert a missing/zero denominator into zero latency or utilization.
 
-Inspect raw sample times, for example with `<metric>{<verified-scope>}[<window>]` through `prometheus_instant_query` at the fixed end time. Check the returned result type and timestamp meaning: use a matrix's timestamps as publication evidence only when they represent original samples. An evaluated vector's tuple timestamps do not establish raw publication times. Chart points may repeat or resample earlier observations; they are not automatically independent stream publications. Missing periods, duplicate delivery, late data, boundary misalignment, or unknown timestamp semantics limit a whole-window total or average. State the supported coverage rather than filling gaps with zero.
+Inspect raw times using `<metric>{<verified-scope>}[<window>]` through `prometheus_instant_query` at the fixed end. Check result type and timestamp meaning: source observation times need original samples. Vector tuples and chart points can carry evaluation times or repeat earlier observations. Missing periods, duplicates, late data, misaligned boundaries, or unknown timestamp semantics limit totals/averages; report supported coverage instead of filling gaps with zero.
 
 ## Worked example: RDS or Aurora CPU and read latency
 
-For “show CPU and read latency for this database over this interval”:
+Resolve account, region, and database dimensions. For Aurora, choose instance, cluster, or role: AWS publishes [different dimension combinations](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/dimensions.html), so selecting every row with a cluster name can overlap resources.
 
-1. Resolve the chosen account, region, and database using actual dimensions. For Aurora, determine whether the request concerns an instance, the cluster, or a role. AWS publishes [different dimension combinations](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/dimensions.html); inspect the selected series instead of combining every row with the cluster's name.
-2. Discover the CPUUtilization and ReadLatency families in that scope. Verify whether the returned metrics are stream-summary companions, exporter gauges, or a different source. Read a small raw window and inspect labels, timestamps, and units before building the final expression.
-3. If the observed family uses period Sum/SampleCount, execute the companion ratio for the period averages. For a requested full-window average, execute the weighted template only after verifying its coverage conditions. Keep CPU and latency calculations separate, and report their actual aggregation level.
-4. [RDS CloudWatch metrics](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/rds-metrics.html) define CPUUtilization as Percent and ReadLatency as seconds. Confirm the ingested unit mapping. Convert seconds to milliseconds with a factor of 1,000 only when that is the observed input unit. Enhanced Monitoring or exporter metrics with similar names can have different definitions or units.
-5. Report the measured values with the exact executed selectors and interval, or say which result is unavailable. Without distributions or equivalent raw observations, period latency averages and percentiles do not establish a whole-window latency percentile.
+Discover CPUUtilization and ReadLatency families, batch their companion reads, and verify source, labels, timestamps, and units. For stream summaries, use the latest companion pair for requested period averages; use the weighted template only for a requested window average with verified coverage. Report each metric's aggregation level separately.
 
-## Sparse metrics: S3 daily storage
+[RDS metrics](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/rds-metrics.html) define CPUUtilization in Percent and ReadLatency in seconds. Confirm ingestion mapping before converting latency to milliseconds by multiplying by 1,000. Enhanced Monitoring and similarly named exporters can differ in units/definitions. Period latency averages or percentiles cannot establish whole-window percentiles without distributions or equivalent raw observations.
 
-An empty recent lookup for BucketSizeBytes or NumberOfObjects does not establish zero, deletion, or a stopped stream. These are [daily S3 storage metrics](https://docs.aws.amazon.com/AmazonS3/latest/userguide/metrics-dimensions.html), distinct from request metrics. AWS documents a [daily period and Average statistic](https://docs.aws.amazon.com/AmazonS3/latest/userguide/cloudwatch-monitoring-accessing.html) for viewing them.
+## Sparse S3 storage: last-known is not current
 
-Discover the actual bucket and storage-type dimensions. Read bounded history spanning the daily cadence, such as the last three days, and inspect the timestamps of actual samples. Keep this diagnostic history separate from the interval the user asked about. Distinguish a numeric zero, a last known observation, and no observation in the requested interval. Do not claim that a `last_over_time()` result's evaluation timestamp is the original publication time; use raw sample timestamps to establish the age. Preserve the exact returned timestamp: copy raw Unix seconds when needed, or verify the UTC conversion with an available tool. If no reliable conversion tool is available, report the exact epoch only and omit converted UTC dates, times, and computed ages. Do not round it to a date or midnight.
+BucketSizeBytes and NumberOfObjects are [daily storage metrics](https://docs.aws.amazon.com/AmazonS3/latest/userguide/metrics-dimensions.html), distinct from request metrics; AWS documents a [daily period and Average statistic](https://docs.aws.amazon.com/AmazonS3/latest/userguide/cloudwatch-monitoring-accessing.html). An empty recent lookup does not establish zero, deletion, or a stopped stream.
 
-If expected history is also empty, verify the datasource, filters, source configuration, statistic, and publication cadence before attributing the gap to ingestion. Use available read-only delivery evidence when present. If it is absent, report that whether delivery stopped remains unconfirmed. Do not infer the next publication date or time from “daily” or from the previous sample.
+Discover bucket/storage-type dimensions. Inspect bounded raw history spanning the cadence (for example, three days), separately from the user's requested interval. Distinguish numeric zero, last-known value with original timestamp, and no observation in the requested interval.
 
-## Metric availability and Discover visibility
+**Daily cadence does not make an old sample current.** Honor a user-specified freshness window; otherwise probe each raw companion at the requested end time, separately from widened history. Do not invent a production freshness threshold. Widened history or a historical `last_over_time()` result cannot establish currentness; its evaluation time is not source publication time. If the observations do not establish currentness, report current **unavailable** and the last-known value separately.
 
-A resource can have queryable CloudWatch metrics without appearing in a particular Discover view. Verify ingestion by executing a scoped metric query in the selected datasource. Investigate Discover identity and supported resource discovery separately, using the actual identity dimensions and current integration guidance. Missing application traces or a missing Discover row is not evidence that CloudWatch ingestion failed.
+Preserve exact returned Unix seconds. Verify UTC conversion and any age calculation with a reliable available tool; otherwise report the epoch only and omit converted dates/times and computed ages. `vector(epoch)` merely echoes a number, not a verified time conversion. Never round a source timestamp to a date or midnight.
 
-## Report the evidence
+If history is empty, verify datasource, filters, configuration, statistic, and cadence before blaming ingestion. Without read-only delivery evidence, whether delivery stopped remains unconfirmed. Neither “daily” nor the previous sample establishes the next publication time **or that a newer publication has not arrived**.
 
-For each requested measurement, preserve the user's requested output name and give the value and unit or **unavailable**, the AWS resource and dimension level, datasource and UTC interval, selected source/statistic, and the exact executed query with its returned evidence or tool-call reference. Cite all operands actually used, including both Sum and SampleCount when computing an average. Separate observations from explanations and unresolved causes. Report partial coverage, last-known sample times, and any unsupported requested statistic explicitly; check that the prose arithmetic agrees with the samples and the stated result.
+## Report evidence and separate Discover identity
 
-For an ingestion-versus-UI question, state what the metric query established and what remains unknown about discovery. Link the [Last9 metric explorer](https://app.last9.io/metrics) when useful.
+Keep requested output names. Give value/unit or **unavailable**, resource/dimension level, datasource/UTC interval, source/statistic, and executed queries with evidence/call references. Cite every operand actually used, including Sum and SampleCount for an average. State partial coverage, last-known times, unsupported statistics, and unresolved causes; check prose arithmetic against the samples and result.
+
+A resource may have queryable metrics without a Discover row. Establish availability with a scoped metric query; investigate Discover identity and supported resource profiles separately using actual dimensions and current guidance. Missing traces or a Discover row does not prove ingestion failure. Link the [metric explorer](https://app.last9.io/metrics) when useful.
 
 ## Related skills
 
-Use `last9-logs` for a separate log investigation or `last9-traces` for application span analysis when relevant and available. Neither is a prerequisite for this CloudWatch workflow.
+Use available `last9-logs` or `last9-traces` for separate log/span tasks; neither is required.
