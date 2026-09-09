@@ -21,7 +21,7 @@ setup_fixture() {
   "name": "opencode-last9",
   "version": "0.0.0-test",
   "scripts": {
-    "prepack": "mkdir -p skills && for d in ../../skills/*/; do n=$(basename $d); mkdir -p skills/$n; cp ${d}SKILL.md skills/$n/SKILL.md; done"
+    "prepack": "mkdir -p skills && cp -R ../../skills/. skills/"
   }
 }
 PKG
@@ -98,5 +98,70 @@ mkdir -p "$FIX/plugins/acme/skills/rogue"
 cp "$FIX/skills/last9-logs/SKILL.md" "$FIX/plugins/acme/skills/rogue/SKILL.md"
 git -C "$FIX" add -A && git -C "$FIX" -c user.email=t@t -c user.name=t commit -qm fault
 expect_fail "committed plugin skill copy"
+
+# References must ship exactly when tracked, without permitting arbitrary payloads.
+setup_fixture reference-happy
+mkdir -p "$FIX/skills/last9-logs/references"
+printf 'focused reference\n' > "$FIX/skills/last9-logs/references/family.md"
+commit_fault
+if ! run_full sh "$FIX/scripts/check-skill-pack.sh" >/dev/null 2>&1; then
+  echo "selftest FAILED: tracked Markdown reference expected exit 0" >&2
+  exit 1
+fi
+
+setup_fixture reference-missing
+mkdir -p "$FIX/skills/last9-logs/references"
+printf 'focused reference\n' > "$FIX/skills/last9-logs/references/family.md"
+commit_fault
+# Simulate a packer that omits a tracked reference.
+jq '.scripts.prepack += " && rm skills/last9-logs/references/family.md"' "$FIX/plugins/opencode-last9/package.json" > "$FIX/package.tmp"
+mv "$FIX/package.tmp" "$FIX/plugins/opencode-last9/package.json"
+expect_fail "missing packaged reference"
+
+setup_fixture reference-untracked
+mkdir -p "$FIX/skills/last9-logs/references"
+printf 'untracked experiment\n' > "$FIX/skills/last9-logs/references/untracked.md"
+expect_fail "untracked packaged reference"
+
+setup_fixture arbitrary-payload
+mkdir -p "$FIX/skills/last9-logs/scripts"
+printf 'echo unexpected\n' > "$FIX/skills/last9-logs/scripts/run.sh"
+commit_fault
+expect_fail "arbitrary tracked script"
+
+setup_fixture reference-symlink
+mkdir -p "$FIX/skills/last9-logs/references"
+printf 'outside skill\n' > "$FIX/outside.md"
+ln -s ../../../outside.md "$FIX/skills/last9-logs/references/escape.md"
+commit_fault
+expect_fail "tracked reference symlink"
+
+setup_fixture reference-parent-symlink
+mkdir -p "$FIX/skills/last9-logs/references"
+printf 'focused reference\n' > "$FIX/skills/last9-logs/references/family.md"
+commit_fault
+mv "$FIX/skills/last9-logs/references" "$FIX/outside-references"
+ln -s ../../outside-references "$FIX/skills/last9-logs/references"
+expect_fail "working-tree reference parent symlink"
+
+setup_fixture reference-without-entrypoint
+mkdir -p "$FIX/skills/orphan/references"
+printf 'orphan\n' > "$FIX/skills/orphan/references/family.md"
+commit_fault
+expect_fail "reference without entrypoint"
+
+# The gate must never delete or inspect another invocation's archive.
+setup_fixture archive-isolation
+ARCHIVE_TMP="$SANDBOX/archive-temp"
+mkdir -p "$ARCHIVE_TMP"
+printf 'unrelated archive\n' > "$ARCHIVE_TMP/sentinel.tgz"
+if ! TMPDIR="$ARCHIVE_TMP" run_full sh "$FIX/scripts/check-skill-pack.sh" >/dev/null 2>&1; then
+  echo "selftest FAILED: isolated archive pack expected exit 0" >&2
+  exit 1
+fi
+if [ ! -f "$ARCHIVE_TMP/sentinel.tgz" ] || [ "$(cat "$ARCHIVE_TMP/sentinel.tgz")" != "unrelated archive" ]; then
+  echo "selftest FAILED: unrelated archive was changed or deleted" >&2
+  exit 1
+fi
 
 echo "check-skill-pack selftests passed"

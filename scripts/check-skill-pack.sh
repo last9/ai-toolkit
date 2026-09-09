@@ -20,6 +20,28 @@ if [ -n "$(git ls-files 'plugins/*/skills/*')" ]; then
   exit 1
 fi
 
+# Canonical payload is deliberately narrow: one entrypoint plus optional direct
+# Markdown references. Reject links before prepack can follow them outside skills/.
+for payload in $(git ls-files 'skills/**'); do
+  if ! printf '%s\n' "$payload" | grep -Eq '^skills/[a-z0-9-]+/(SKILL\.md|references/[a-z0-9-]+\.md)$'; then
+    echo "::error::unsupported canonical skill payload: $payload" >&2
+    exit 1
+  fi
+  skill_dir="$(printf '%s\n' "$payload" | cut -d/ -f1,2)"
+  if ! git ls-files --error-unmatch "$skill_dir/SKILL.md" >/dev/null 2>&1; then
+    echo "::error::skill reference has no tracked entrypoint: $payload" >&2
+    exit 1
+  fi
+  if [ -L skills ] || [ -L "$skill_dir" ] || [ -L "$skill_dir/references" ] || [ -L "$payload" ] || [ ! -f "$payload" ]; then
+    echo "::error::skill payload must be a regular file without symlink parents: $payload" >&2
+    exit 1
+  fi
+  if git ls-files --stage -- "$payload" | grep -q '^120000 '; then
+    echo "::error::tracked skill symlinks are forbidden: $payload" >&2
+    exit 1
+  fi
+done
+
 # 1. Frontmatter name must equal the skill directory name. Extract from the
 #    YAML frontmatter block only (between the first two --- delimiters), so a
 #    body line starting "name: " cannot false-fail the gate.
@@ -90,27 +112,34 @@ jq -e '.skills == "./skills/"' .codex-plugin/plugin.json >/dev/null || {
 #    tarball so npm failures fail fast and listing comes from tar, not logs.
 cd plugins/opencode-last9
 npm run prepack >/dev/null
-tgz="$(mktemp "${TMPDIR:-/tmp}/skill-pack.XXXXXX.tgz")"
-npm pack --pack-destination "$(dirname "$tgz")" --silent >/dev/null 2>&1 || {
+PACK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/skill-pack.XXXXXX")"
+trap 'rm -rf "$PACK_DIR"' EXIT
+npm pack --pack-destination "$PACK_DIR" --silent >/dev/null 2>&1 || {
   echo "::error::npm pack failed" >&2
   exit 1
 }
-tar -tzf "$(ls -t "$(dirname "$tgz")"/*.tgz | head -1)" > "$tgz.list"
-rm -f "$(dirname "$tgz")"/*.tgz
+set -- "$PACK_DIR"/*.tgz
+if [ "$#" -ne 1 ] || [ ! -f "$1" ]; then
+  echo "::error::npm pack did not produce exactly one archive" >&2
+  exit 1
+fi
+tgz="$1"
+tar -tzf "$tgz" > "$tgz.list"
 cd "$ROOT_DIR"
 missing=0
-for skill_md in $(git ls-files 'skills/*/SKILL.md'); do
-  grep -q "^package/skills/${skill_md#skills/}$" "$tgz.list" || {
-    echo "::error::opencode tarball missing canonical skill: $skill_md" >&2
+for payload in $(git ls-files 'skills/**'); do
+  grep -Fqx "package/$payload" "$tgz.list" || {
+    echo "::error::opencode tarball missing canonical skill payload: $payload" >&2
     missing=1
   }
 done
-extras=$(grep -E "^package/skills/" "$tgz.list" | grep -vE "^package/skills/[^/]+/SKILL\.md$" || true)
-if [ -n "$extras" ]; then
-  echo "::error::opencode tarball ships unexpected skills payload:" >&2
-  echo "$extras" >&2
-  missing=1
-fi
+for packed in $(grep -E '^package/skills/' "$tgz.list" || true); do
+  payload="${packed#package/}"
+  if ! printf '%s\n' "$payload" | grep -Eq '^skills/[a-z0-9-]+/(SKILL\.md|references/[a-z0-9-]+\.md)$' || ! git ls-files --error-unmatch -- "$payload" >/dev/null 2>&1; then
+    echo "::error::opencode tarball ships unexpected or untracked skills payload: $packed" >&2
+    missing=1
+  fi
+done
 rm -f "$tgz.list"
 [ "$missing" -eq 0 ] || exit 1
 

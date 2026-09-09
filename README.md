@@ -16,6 +16,7 @@ MCP gives your agent access. Skills give it judgment.
 | [`go-agent-install`](skills/go-agent-install/SKILL.md) | Instrument a Go service with Last9 go-agent: detect the stack, wire chi + `database/sql` tracing, promote opt-in body capture, and verify spans land — without double-instrumenting |
 | [`last9-logs`](skills/last9-logs/SKILL.md) | Log investigation: scope to a service first, attribute filters over body search, aggregate before drilling into raw lines |
 | [`last9-traces`](skills/last9-traces/SKILL.md) | Trace investigation: a five-question interview that lands on the right tool call, plus a `tracejson` syntax reference card |
+| [`last9-cloudwatch`](skills/last9-cloudwatch/SKILL.md) | CloudWatch investigation across Billing, RDS/Aurora, ElastiCache, MSK, DynamoDB, EC2, SQS, DMS, KMS, and S3; focused family references share discovery, statistic, and evidence rules |
 
 ## Installation
 
