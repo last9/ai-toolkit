@@ -47,7 +47,7 @@ Installed schemas take precedence over this reference:
 | `prometheus_instant_query` | `query`, `datasource`, `time_iso` |
 | `prometheus_range_query` | `query`, `datasource`, `start_time_iso`, `end_time_iso` |
 
-Discover names with `label: "__name__"`. Do not invent a `step` parameter. Distinguish raw range selectors evaluated once from repeatedly evaluated charts.
+Discover names with `label: "__name__"`. Do not invent a `step` parameter. Distinguish raw range selectors evaluated once from repeatedly evaluated charts. A selector carrying no range returns only the latest period, so any total, average, or coverage claim about a whole interval needs a range selector spanning that interval; before claiming one, check that the returned sample count matches the periods the interval should contain.
 
 ## Discover and execute efficiently
 
