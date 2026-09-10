@@ -10,7 +10,7 @@ Broker metrics, cluster aggregates, and topic breakdowns are not interchangeable
 
 ## Throughput and lag
 
-- `BytesInPerSec`, `BytesOutPerSec`, and `MessagesInPerSec` already describe rates. Use the requested level or average; applying `rate()` again changes the quantity. Combining broker/topic rows needs a verified non-overlapping population.
+- `BytesInPerSec`, `BytesOutPerSec`, and `MessagesInPerSec` already describe rates, so applying `rate()` again changes the quantity. Match the average to the requested window: for the latest period use that matched Sum/SampleCount pair; for a mean over the requested interval use total Sum / total SampleCount across the disjoint periods, read from the raw companion series over that window rather than a single instant query returning only the last period. Combining broker/topic rows needs a verified non-overlapping population.
 - `MaxOffsetLag` is the maximum offset lag across the applicable partitions; `SumOffsetLag` is a different aggregate. Neither is a count of unique messages processed during the observation window.
 - `EstimatedMaxTimeLag` is in seconds. An offset count cannot be converted to time without additional evidence.
 
