@@ -6,7 +6,7 @@ Use the shared scope, statistic, and evidence rules in [SKILL.md](../SKILL.md).
 
 For an instance request, discover and select its actual `InstanceId` dimension. AWS also supports aggregation dimensions such as `AutoScalingGroupName`, `ImageId`, and `InstanceType` for applicable metrics; do not assume all rows are per-instance or sum aggregate rows with their instances. Metric availability depends on instance type and monitoring configuration.
 
-Basic monitoring commonly supplies five-minute periods; detailed monitoring supplies one-minute periods for supported metrics. Some metrics retain their own cadence. Inspect actual timestamps and definitions before assuming sixty-second coverage.
+Basic monitoring commonly supplies five-minute periods; detailed monitoring supplies one-minute periods for supported metrics. Some metrics retain their own cadence. Inspect actual timestamps and definitions before assuming sixty-second coverage. Observed spacing establishes reporting cadence only: five-minute spacing does not confirm basic monitoring, one-minute spacing does not confirm detailed monitoring, and neither establishes where period boundaries fall, because stream configuration and ingestion can change both.
 
 ## Levels, bytes, and credits
 

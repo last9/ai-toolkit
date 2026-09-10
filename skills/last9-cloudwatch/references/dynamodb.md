@@ -18,7 +18,7 @@ sum(sum_over_time(<consumed-capacity-sum>{<verified-scope>}[<window>]))
 
 Confirm full period coverage before reporting a window total. Do not divide by SampleCount, use `increase()` on period summaries, or add repeated chart rollups.
 
-If the verified data path uses period-end timestamps for period `P`, complete disjoint observations stamped `start + P`, `start + 2P`, through `end` cover the period-aligned interval `(start, end]`. A missing observation stamped exactly at `start` does not by itself leave the first period uncovered. If timestamp-to-period mapping is unverified, state that uncertainty separately.
+For verified Metric Streams lineage, AWS documents period-end stamps (see the timestamp rule in [SKILL.md](../SKILL.md)): complete disjoint observations stamped `start + P`, `start + 2P`, through `end` cover the period-aligned interval `(start, end]`, and a missing observation stamped exactly at `start` leaves the first period covered. Cite that documentation and the lineage evidence in the report. For exporters or unverified lineage, report the observed stamps and state that boundary alignment is assumed.
 
 `SuccessfulRequestLatency` is milliseconds and operation-specific; it excludes unsuccessful requests, so it is not end-to-end latency for all attempts. Throttle events, throttled requests, conditional failures, and transaction conflicts count different things. Publication conditions vary by metric: verify the definition and data path before interpreting an empty event series as zero. Missing data alone is not proof of healthy service.
 
