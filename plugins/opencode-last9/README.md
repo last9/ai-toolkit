@@ -36,7 +36,7 @@ export LAST9_ORG_SLUG="<org-slug>"
 ## What it registers
 
 - **`last9` MCP server** — a remote MCP endpoint at `https://app.last9.io/api/v4/organizations/<org-slug>/mcp`. OpenCode handles OAuth automatically (dynamic client registration + browser flow).
-- **Last9 skills** — the canonical skills from [`last9/ai-toolkit`](https://github.com/last9/ai-toolkit) (`last9-logs`, `last9-traces`, `go-agent-install`, `sidekiq-debugging`), loaded via `skills.paths`.
+- **Last9 skills** — the canonical skills from [`last9/ai-toolkit`](https://github.com/last9/ai-toolkit) (`last9-logs`, `last9-traces`, `last9-cloudwatch`, `go-agent-install`), loaded via `skills.paths`.
 
 ## Configuration
 
