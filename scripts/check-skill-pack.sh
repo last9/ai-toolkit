@@ -20,10 +20,12 @@ if [ -n "$(git ls-files 'plugins/*/skills/*')" ]; then
   exit 1
 fi
 
-# Canonical payload is deliberately narrow: one entrypoint plus optional direct
-# Markdown references. Reject links before prepack can follow them outside skills/.
+# Canonical payload is deliberately narrow: one entrypoint, direct Markdown
+# references, and optional flat scripts/*.py helpers (no nesting, no other
+# extensions). Reject links before prepack can follow them outside skills/.
+PAYLOAD_RE='^skills/[a-z0-9-]+/(SKILL\.md|references/[a-z0-9-]+\.md|scripts/[a-z0-9_]+\.py)$'
 for payload in $(git ls-files 'skills/**'); do
-  if ! printf '%s\n' "$payload" | grep -Eq '^skills/[a-z0-9-]+/(SKILL\.md|references/[a-z0-9-]+\.md)$'; then
+  if ! printf '%s\n' "$payload" | grep -Eq "$PAYLOAD_RE"; then
     echo "::error::unsupported canonical skill payload: $payload" >&2
     exit 1
   fi
@@ -32,7 +34,7 @@ for payload in $(git ls-files 'skills/**'); do
     echo "::error::skill reference has no tracked entrypoint: $payload" >&2
     exit 1
   fi
-  if [ -L skills ] || [ -L "$skill_dir" ] || [ -L "$skill_dir/references" ] || [ -L "$payload" ] || [ ! -f "$payload" ]; then
+  if [ -L skills ] || [ -L "$skill_dir" ] || [ -L "$skill_dir/references" ] || [ -L "$skill_dir/scripts" ] || [ -L "$payload" ] || [ ! -f "$payload" ]; then
     echo "::error::skill payload must be a regular file without symlink parents: $payload" >&2
     exit 1
   fi
@@ -135,7 +137,7 @@ for payload in $(git ls-files 'skills/**'); do
 done
 for packed in $(grep -E '^package/skills/' "$tgz.list" || true); do
   payload="${packed#package/}"
-  if ! printf '%s\n' "$payload" | grep -Eq '^skills/[a-z0-9-]+/(SKILL\.md|references/[a-z0-9-]+\.md)$' || ! git ls-files --error-unmatch -- "$payload" >/dev/null 2>&1; then
+  if ! printf '%s\n' "$payload" | grep -Eq "$PAYLOAD_RE" || ! git ls-files --error-unmatch -- "$payload" >/dev/null 2>&1; then
     echo "::error::opencode tarball ships unexpected or untracked skills payload: $packed" >&2
     missing=1
   fi
