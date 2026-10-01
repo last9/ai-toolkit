@@ -8,3 +8,5 @@ STRATEGY.md
 
 # Local hygiene denylist — the list itself is the leak
 .skill-denylist
+__pycache__/
+*.pyc
