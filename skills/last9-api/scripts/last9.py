@@ -213,7 +213,10 @@ def cmd_logout(a):
 
 def resolve_url(ctx, path, queries):
     if path.startswith(("http://", "https://")):
-        if urllib.parse.urlsplit(path).hostname != ctx.host:
+        parts = urllib.parse.urlsplit(path)
+        if parts.scheme != "https":
+            die("refusing to send token over plaintext HTTP — use https://")
+        if parts.hostname != ctx.host:
             die("refusing to send token to foreign host (expected %s)" % ctx.host)
         url = path
     elif path.startswith("/api/"):

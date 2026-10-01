@@ -39,7 +39,7 @@ Config lives in `~/.last9` (override with `LAST9_CONFIG_DIR`). `logout` removes 
 - Always call the API through `last9.py api`. It sets `X-LAST9-API-TOKEN: Bearer <token>` and refreshes expired tokens. Do not hand-build the header.
 - Never print, echo, or log a token or the refresh token into the transcript. Use `last9.py token` only when piping into another tool (`$(...)`).
 - Pick the profile by scope and org: `--profile <name>` (or `LAST9_PROFILE`). Keep a read-only profile for queries and a separate write profile for change events or migrations. One profile per org.
-- `api` refuses full URLs whose host differs from the token's host.
+- `api` sends the token only over `https://` and only to the token's own host. It refuses plaintext `http://` URLs and any other host, and does not follow redirects.
 - When comparing query results, pin absolute `start`/`end` values. Two "last N minutes" queries issued seconds apart already diverge.
 
 ## Using `api`
@@ -75,4 +75,4 @@ python3 <skill-dir>/scripts/last9.py api METHOD PATH [-d DATA] [-q k=v ...] [-H 
 | `500 ERR_S3_CONFIG_MISSING` or `502` "Maintenance Mode" HTML on logs/traces | Wrong region for this org | Use the org's real region; do not retry other regions blindly |
 | `400 invalid refresh token: ...` from an API call | Misleading wording; the access token is bad | Delete `~/.last9/cache/<profile>.json` or re-login |
 | `403` | Token scope too low for the operation | Use a profile whose refresh token has the needed scope (read, write, delete) |
-| "refusing to send token to foreign host" | Full URL on a host other than the token's | Use a relative path |
+| "refusing to send token to foreign host" or "over plaintext HTTP" | Full URL on another host, or using `http://` | Use a relative path, or an `https://` URL on the token's host |
