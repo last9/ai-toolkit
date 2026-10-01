@@ -144,6 +144,17 @@ class TestTokens(Base):
         self.assertNotIn("fromenv", open(last9.creds_path()).read())
         self.assertNotIn(os.environ["LAST9_REFRESH_TOKEN"], open(ctx.cache_file).read())
 
+    def test_unwritable_cache_is_not_fatal(self):
+        os.environ["LAST9_REFRESH_TOKEN"] = self.refresh
+        ctx = last9.Ctx("default")
+        err = io.StringIO()
+        with mock.patch("urllib.request.urlopen", return_value=token_resp("NEW")), \
+                mock.patch.object(last9, "write_private", side_effect=PermissionError(13, "Permission denied")), \
+                mock.patch.object(sys, "stderr", err):
+            self.assertEqual(last9.access_token(ctx), "NEW")
+        self.assertIn("could not cache access token", err.getvalue())
+        self.assertNotIn("NEW", err.getvalue())
+
     def test_not_logged_in(self):
         with mock.patch.object(sys, "stderr", io.StringIO()) as err, self.assertRaises(SystemExit):
             last9.Ctx("default")

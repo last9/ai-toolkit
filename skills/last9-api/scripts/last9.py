@@ -123,7 +123,10 @@ def exchange(host, refresh):
 
 def save_cache(ctx, resp):
     entry = {"access_token": resp["access_token"], "expires_at": resp["expires_at"]}
-    write_private(ctx.cache_file, entry)
+    try:
+        write_private(ctx.cache_file, entry)
+    except OSError as e:  # read-only home / sandbox: still usable, just re-exchanges per call
+        sys.stderr.write("warning: could not cache access token (%s)\n" % (e.strerror or e))
     return entry
 
 
