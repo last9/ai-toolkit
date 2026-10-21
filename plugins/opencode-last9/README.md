@@ -69,6 +69,10 @@ opencode mcp list   # last9 should appear as connected or needs authentication
 
 ## Development
 
+Use the Node release pinned in `.nvmrc` (`nvm use`); CI reads the same file.
+`engines.node` admits only Node 22 and 24 releases that reject the revoked
+eMudhra intermediates (22.23.4+, 24.22.1+).
+
 ```shell
 npm install
 npm test        # unit tests (tsx --test)
