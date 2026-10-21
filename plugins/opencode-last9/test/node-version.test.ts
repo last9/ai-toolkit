@@ -1,10 +1,12 @@
 import { strict as assert } from "node:assert"
-import { readFileSync } from "node:fs"
+import { readdirSync, readFileSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import test from "node:test"
 
 const pkgDir = resolve(dirname(fileURLToPath(import.meta.url)), "..")
+const repoRoot = resolve(pkgDir, "../..")
+const workflowsDir = resolve(repoRoot, ".github/workflows")
 
 // First release on each supported line carrying the eMudhra SPKI blocklist
 // (nodejs/node#66871). Lines without a patched release stay out of `engines`.
@@ -40,4 +42,19 @@ test("engines.node admits only patched releases of supported lines", () => {
     .map((floor) => `^${floor.join(".")}`)
     .join(" || ")
   assert.equal(pkg.engines.node, expected)
+})
+
+test("workflows set up Node only from .nvmrc", () => {
+  const workflows = readdirSync(workflowsDir).filter((f) => /\.ya?ml$/.test(f))
+  let setups = 0
+  for (const file of workflows) {
+    const text = readFileSync(resolve(workflowsDir, file), "utf8")
+    assert.doesNotMatch(text, /node-version:/, `${file} sets node-version inline`)
+    const steps = text.match(/uses: actions\/setup-node@/g)?.length ?? 0
+    const fromFile =
+      text.match(/node-version-file: plugins\/opencode-last9\/\.nvmrc$/gm)?.length ?? 0
+    assert.equal(fromFile, steps, `${file}: every setup-node step must read .nvmrc`)
+    setups += steps
+  }
+  assert.ok(setups > 0, "no workflow sets up Node; CI would run the runner default")
 })
