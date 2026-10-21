@@ -1,0 +1,44 @@
+name: OpenCode plugin
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: plugins/opencode-last9
+
+jobs:
+  test:
+    name: Test and typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version-file: plugins/opencode-last9/.nvmrc
+
+      - run: node -p process.version
+      - run: npm install --no-audit --no-fund
+      - run: npm test
+      - run: npm run typecheck
+
+  # The pinned Node must reject chains through the revoked eMudhra
+  # intermediates (#23) while still trusting normal HTTPS endpoints.
+  tls-probe:
+    name: TLS revocation probe
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version-file: plugins/opencode-last9/.nvmrc
+
+      - run: node scripts/tls-probe.mjs
