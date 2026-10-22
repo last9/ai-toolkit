@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/last9/ai-toolkit/compare/opencode-last9-v0.3.0...opencode-last9-v0.4.0) (2026-10-22)
+
+
+### Features
+
+* **skills:** add last9-api skill with a deterministic token-handling CLI ([#21](https://github.com/last9/ai-toolkit/issues/21)) ([ec0d201](https://github.com/last9/ai-toolkit/commit/ec0d2016124ea9d70cc68341ff6cc93a03e8c9c5))
+
+
+### Bug Fixes
+
+* **opencode:** admit patched Node 26.12.1 and release the patched engines ([#25](https://github.com/last9/ai-toolkit/issues/25)) ([d963231](https://github.com/last9/ai-toolkit/commit/d96323167d5287b479d237ff2671c74552b10fa8))
+
 ## [0.3.0](https://github.com/last9/ai-toolkit/compare/opencode-last9-v0.2.0...opencode-last9-v0.3.0) (2026-08-24)
 
 
