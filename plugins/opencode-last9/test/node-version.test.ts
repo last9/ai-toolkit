@@ -13,6 +13,7 @@ const workflowsDir = resolve(repoRoot, ".github/workflows")
 const PATCHED_FLOORS: Record<number, [number, number, number]> = {
   22: [22, 23, 4],
   24: [24, 22, 1],
+  26: [26, 12, 1],
 }
 
 function parseExact(version: string): [number, number, number] {
