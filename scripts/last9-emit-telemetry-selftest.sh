@@ -314,6 +314,128 @@ else
   fail "wrapper receipt missing export/queryable split: $(cat "$WORKDIR/wrap.out")"
 fi
 
+# --- preflight: invalid requests must never start a generator ---
+# The marker also catches partial writes when a later signal is invalid.
+cat >"$FAKEBIN/telemetrygen" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$1" >>"$EMIT_TEST_CALLS"
+exit 0
+EOF
+export EMIT_TEST_CALLS="$WORKDIR/calls"
+expect_preflight_failure() {
+  rm -f "$EMIT_TEST_CALLS"
+  if PATH="$FAKEBIN:$PATH" "$HELPER" \
+    --org example-org --environment alpha --datasource metrics-ds \
+    --credential-file "$CRED" --acceptance-run "$_valid" \
+    "$@" >"$WORKDIR/preflight.out" 2>"$WORKDIR/preflight.err"; then
+    fail "preflight accepted $1"
+  elif [ -e "$EMIT_TEST_CALLS" ]; then
+    fail "preflight started a generator before rejecting $1"
+  else
+    pass "preflight refuses $1 before emitting"
+  fi
+}
+for _bad_signals in '' ',' 'metrics,bogus' 'metrics,metrics' 'metrics,' 'metrics,,logs' 'metrics logs' '*'; do
+  expect_preflight_failure --signals "$_bad_signals"
+done
+for _bad_rate in 0 0.0 00 -1 NaN Inf 1e999 101 '1
+--otlp-insecure'; do
+  expect_preflight_failure --rate "$_bad_rate"
+done
+for _bad_duration in 0s 0ms 0.0s -1s inf INF 1h 61s 60001ms '5s
+--otlp-insecure'; do
+  expect_preflight_failure --duration "$_bad_duration"
+done
+for _bad_workers in 0 -1 1.5 11 1000000 '1
+--otlp-insecure'; do
+  expect_preflight_failure --workers "$_bad_workers"
+done
+expect_preflight_failure --service 'line1
+line2'
+expect_preflight_failure --rate
+expect_preflight_failure --service header-test
+expect_preflight_failure --acceptance-run "$_valid
+--otlp-insecure"
+expect_preflight_failure --acceptance-run "$_valid
+"
+
+for _limits in '59s 99 9' '60s 100 10' '60000ms .1 1' '0.5s 0.1 1'; do
+  # Intentional splitting of constant test tuples, never of user input.
+  set -- $_limits
+  if "$HELPER" --dry-run --org example-org --environment alpha \
+    --datasource metrics-ds --credential-file "$CRED" --signals traces \
+    --duration "$1" --rate "$2" --workers "$3" >"$WORKDIR/bounds.out"; then
+    pass "valid bounded limits accepted"
+  else
+    fail "valid bounded limits rejected"
+  fi
+done
+
+# Endpoint text is serialized one argument per line, so reject line breaks,
+# queries, fragments and unsupported schemes before serializing anything.
+for _bad_endpoint in 'https://host:443?secret=value' 'https://host:443#fragment' \
+  'ftp://host:443' 'https://host:0' 'https://host:65536' 'https://host:abc' \
+  'https://host:443
+--otlp-insecure'; do
+  if normalize_otlp_endpoint "$_bad_endpoint" >/dev/null 2>&1; then
+    fail "invalid endpoint accepted"
+  else
+    pass "invalid endpoint refused"
+  fi
+done
+
+# Never echo a rejected argument, including the --flag=value spelling.
+if "$HELPER" '--otlp-header=Authorization=example-secret-marker' \
+  >"$WORKDIR/rejected.out" 2>&1; then
+  fail "inline credential argument accepted"
+elif grep -q 'example-secret-marker' "$WORKDIR/rejected.out"; then
+  fail "rejected credential argument echoed"
+else
+  pass "rejected credential argument stays private"
+fi
+
+# A receipt must describe the actual metric requested, including its common
+# Prometheus spelling, rather than silently reverting to the default name.
+_custom=$("$HELPER" --dry-run --org example-org --environment alpha \
+  --datasource metrics-ds --credential-file "$CRED" --signals metrics \
+  --otlp-metric-name custom.test.metric --acceptance-run "$_valid")
+if printf '%s' "$_custom" | grep -Fq '"metric_names":["custom.test.metric","custom_test_metric"]'; then
+  pass "receipt reflects custom metric name"
+else
+  fail "receipt lost custom metric name"
+fi
+
+# Signal-specific SDK headers override generic headers. The credential file
+# must win over an unrelated parent process's exporter configuration.
+cat >"$FAKEBIN/telemetrygen" <<'EOF'
+#!/bin/sh
+case "$1" in
+  metrics) actual=${OTEL_EXPORTER_OTLP_METRICS_HEADERS:-$OTEL_EXPORTER_OTLP_HEADERS} ;;
+  logs) actual=${OTEL_EXPORTER_OTLP_LOGS_HEADERS:-$OTEL_EXPORTER_OTLP_HEADERS} ;;
+  traces) actual=${OTEL_EXPORTER_OTLP_TRACES_HEADERS:-$OTEL_EXPORTER_OTLP_HEADERS} ;;
+esac
+# SDK diagnostics may include a bare or decoded value without a header name.
+echo 'example-secret-marker' >&2
+[ "$actual" = 'Authorization=Basic <your-api-key>' ] || exit 42
+EOF
+OTEL_EXPORTER_OTLP_METRICS_HEADERS='wrong-org' \
+OTEL_EXPORTER_OTLP_LOGS_HEADERS='wrong-org' \
+OTEL_EXPORTER_OTLP_TRACES_HEADERS='wrong-org' \
+PATH="$FAKEBIN:$PATH" "$HELPER" \
+  --org example-org --environment alpha --datasource metrics-ds \
+  --credential-file "$CRED" --signals metrics,logs,traces \
+  --acceptance-run "$_valid" >"$WORKDIR/isolated.out" 2>"$WORKDIR/isolated.err" && _isolation_st=0 || _isolation_st=$?
+if [ "$_isolation_st" -ne 0 ]; then
+  fail "ambient signal headers overrode authorized credentials"
+else
+  pass "authorized credential file wins for every signal"
+fi
+if grep -q 'example-secret-marker' "$WORKDIR/isolated.err"; then
+  fail "raw generator diagnostic leaked"
+else
+  pass "raw generator diagnostics stay private"
+fi
+
 # --- SKILL.md still encodes the same gates ---
 for _needle in \
   "acceptance_run" \
