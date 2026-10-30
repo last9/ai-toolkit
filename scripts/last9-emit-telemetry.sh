@@ -333,6 +333,8 @@ Usage: last9-emit-telemetry.sh --org <org-slug> --environment <env> --datasource
 Never pass plaintext credentials. --credential-file / --credential-env must name a local file.
 Limits: --duration positive seconds/milliseconds up to 60s (default 5s),
 --rate positive decimal up to 100 (default 1), --workers 1..10 (default 1).
+Requires python3. Each child has duration + 1s to finish, then at most 0.5s
+to stop after TERM before KILL. Expiry produces a client_failed receipt.
 EOF
 }
 
@@ -467,6 +469,11 @@ last9_emit_telemetry_main() {
       echo "telemetrygen not on PATH" >&2
       return 1
     fi
+    if ! command -v python3 >/dev/null 2>&1; then
+      rm -f "$_argv_file"
+      echo "python3 is required to enforce the generator deadline" >&2
+      return 1
+    fi
     _out=$(mktemp "${TMPDIR:-/tmp}/last9-emit-out.XXXXXX")
     _err=$(mktemp "${TMPDIR:-/tmp}/last9-emit-err.XXXXXX")
     _cmd_bin=""
@@ -488,7 +495,29 @@ last9_emit_telemetry_main() {
       export OTEL_EXPORTER_OTLP_LOGS_HEADERS="$_cred_headers"
       export OTEL_EXPORTER_OTLP_TRACES_HEADERS="$_cred_headers"
       # Headers stay in the child environment, never on argv / process listing.
-      "$_cmd_bin" "$@" >"$_out" 2>"$_err"
+      # telemetrygen can block in a rate-token wait after its duration timer
+      # expires. Supervise it independently, allowing 1s for normal shutdown
+      # and at most another 0.5s after TERM before killing and reaping it.
+      python3 -c '
+import subprocess
+import sys
+
+value = sys.argv[1]
+seconds = float(value[:-2]) / 1000 if value.endswith("ms") else float(value[:-1])
+child = subprocess.Popen(sys.argv[2:])
+try:
+    status = child.wait(timeout=seconds + 1)
+except subprocess.TimeoutExpired:
+    child.terminate()
+    try:
+        child.wait(timeout=0.5)
+    except subprocess.TimeoutExpired:
+        child.kill()
+        child.wait()
+    # Expiry is a failure even if TERM makes the generator exit successfully.
+    status = 124
+sys.exit(status if status >= 0 else 1)
+' "$_duration" "$_cmd_bin" "$@" >"$_out" 2>"$_err"
     )
     _st=$?
     set -e

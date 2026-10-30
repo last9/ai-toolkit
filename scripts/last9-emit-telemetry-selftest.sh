@@ -489,4 +489,5 @@ if [ "$FAILS" -ne 0 ]; then
   echo "last9-emit-telemetry selftests failed: $FAILS" >&2
   exit 1
 fi
+python3 "$ROOT_DIR/scripts/last9-emit-telemetry-deadline-selftest.py"
 echo "last9-emit-telemetry selftests passed"

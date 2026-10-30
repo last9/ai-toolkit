@@ -1,7 +1,7 @@
 ---
 name: last9-emit-telemetry
 description: Emit isolated, attributable Last9 OTLP metrics, logs, and traces for testing alerts, investigations, service profiles, and correlation. Use when generating synthetic Last9 telemetry, running telemetrygen against a Last9 OTLP endpoint, seeding an acceptance_run, or verifying that test signals are queryable — not for creating alerts, rules, dashboards, or production instrumentation.
-compatibility: Requires telemetrygen (or equivalent) locally, a user-authorized local OTLP credential file, and the Last9 MCP server for readback
+compatibility: Requires Python 3 and telemetrygen (or equivalent) locally, a user-authorized local OTLP credential file, and the Last9 MCP server for readback
 metadata:
   author: last9
 ---
@@ -19,7 +19,7 @@ Stop unless all of these are present:
 1. **Explicit target** — the user named the org/environment (for example Alpha, staging, or a named demo tenant). Do not infer a substitute org from an unrelated MCP session.
 2. **User-authorized credential reference** — a **local file path**, or an **environment variable name whose value is that path**. Never accept, print, persist, or echo plaintext tokens, `Authorization` values, or `--otlp-header` contents.
 3. **Intended datasource identifier** — the metrics datasource (and log/trace index if the user named one) that readback must query. Do not guess.
-4. **`telemetrygen`** on `PATH` (or an equivalent generator that honors the same attribute and endpoint rules). Install with `go install github.com/open-telemetry/opentelemetry-collector-contrib/cmd/telemetrygen@v0.163.0`.
+4. **Python 3 and `telemetrygen`** on `PATH` (or an equivalent generator that honors the same attribute and endpoint rules). Install with `go install github.com/open-telemetry/opentelemetry-collector-contrib/cmd/telemetrygen@v0.163.0`.
 5. **Last9 MCP** connected to the **same** org for readback (`prometheus_*`, `get_logs`, `get_traces`). If those tools are missing, emit may still run, but you must not claim queryability.
 
 If the working tree is this repository, run the helper instead of hand-rolling `telemetrygen` (it normalizes endpoints, quotes attributes, and suppresses generator logs):
@@ -43,7 +43,7 @@ scripts/last9-emit-telemetry.sh \
 | 2 | `telemetrygen --otlp-endpoint https://host:443/` (gRPC) | Normalize to `host:port`: strip `https://` / `http://` and trailing `/` before invoking |
 | 3 | Showing telemetrygen config output (it logs exporter headers by default) | Suppress all generator stdout/stderr; bare or decoded secrets may have no recognizable marker; never `set -x` |
 | 4 | Emitting without `acceptance_run` | Generate a UUID first; set resource `service.name` + `acceptance_run` and signal-level `acceptance_run` |
-| 5 | Long/unbounded generate (`--duration inf`, `--rate 0`) | Default **5s**, **rate 1**, **workers 1**; require positive values, capped at **60s**, **100 per worker per second**, **10 workers** |
+| 5 | Long/unbounded generate (`--duration inf`, `--rate 0`) | Default **5s**, **rate 1**, **workers 1**; require positive values, capped at **60s**, **100 per worker per second**, **10 workers**; enforce a per-child wall-clock deadline |
 | 6 | Creating alerts, recording rules, dashboards, or deploy config as part of emit | Out of scope. Alert creation, rule mutation, and deployment need **separate user authorization** |
 | 7 | "Export succeeded, so Last9 has it" | Distinguish **OTLP client export** from **queryable in Last9**; claim the latter only after readback finds the run ID |
 | 8 | Retrying the write / duplicating resources when readback is empty | Classify the miss; do not emit again |
@@ -53,7 +53,7 @@ scripts/last9-emit-telemetry.sh \
 1. **Confirm target + credential reference + datasource.** State org, environment, signals, duration/rate, service name (`last9-emit-telemetry` unless the user named one), credential **path**, and datasource. For a production target, get an extra explicit yes. Do not dump the credential file.
 2. **Generate `acceptance_run`.** One UUID for the whole run. Refuse to emit if it is missing or not a UUID.
 3. **Validate the full request before writing.** Require a nonempty, duplicate-free comma-separated signal list. Duration accepts positive decimal seconds or milliseconds (`s` / `ms`), at most 60s; rate accepts a positive decimal up to 100; workers must be an integer from 1 to 10. Normalize the endpoint from the credential file (do not print headers) to `host:port` with a port from 1 to 65535; reject userinfo, queries, fragments, and line breaks.
-4. **Emit** via the helper when present. Otherwise recreate the same wrapper: subshell, `set +x`, set `OTEL_EXPORTER_OTLP_HEADERS` and all three `OTEL_EXPORTER_OTLP_{METRICS,LOGS,TRACES}_HEADERS` to the authorized file value inside the subprocess, **no** `--otlp-header`, suppress all generator output. Repeat once per signal:
+4. **Emit** via the helper when present. Otherwise recreate the same wrapper: subshell, `set +x`, set `OTEL_EXPORTER_OTLP_HEADERS` and all three `OTEL_EXPORTER_OTLP_{METRICS,LOGS,TRACES}_HEADERS` to the authorized file value inside the subprocess, **no** `--otlp-header`, suppress all generator output. Repeat once per signal under a supervisor with a deadline of **requested duration + 1s** for normal shutdown. On expiry send TERM, wait at most **0.5s**, then KILL if necessary and reap the child. Always record `client_failed` on expiry, even if the child exits 0 after TERM. The limit is per signal; signals run sequentially. The raw command below needs this supervision because telemetrygen’s duration timer cannot interrupt rate-token waits:
 
 ```bash
 telemetrygen <metrics|logs|traces> \
@@ -73,7 +73,7 @@ For metrics, also set `--otlp-metric-name last9.emit.telemetry`. If overridden, 
 
 ## Readback — export is not acceptance
 
-`otlp_export=client_ok` means the generator process exited 0. **Queryable in Last9** requires a hit for `acceptance_run` on the intended datasource.
+`otlp_export=client_ok` means every generator process exited 0 before its wall-clock deadline. **Queryable in Last9** requires a hit for `acceptance_run` on the intended datasource.
 
 | Signal | Readback (same org, window covering the emit) |
 |--------|-----------------------------------------------|
@@ -99,3 +99,7 @@ Do not delete telemetry, datasources, alerts, or files automatically. Tell the u
 
 - `last9-logs` / `last9-traces` — query-side investigation after this run is queryable.
 - Alerting, recording rules, dashboard writes, collector deploys, and production config changes are **not** this skill. Those require a separate, explicit user authorization.
+
+## Local validation
+
+Run `scripts/last9-emit-telemetry-selftest.sh` for validation, privacy, receipts, and deadline lifecycle checks. With the pinned telemetrygen installed, also run `python3 scripts/last9-emit-telemetry-deadline-selftest.py --native`: it uses a healthy local HTTP/protobuf receiver to exercise the native rate-limited workers for metrics, logs, and traces at `100ms`, with rates `0.1` and `100`. This loopback test does not establish Last9 ingestion or MCP readback.
