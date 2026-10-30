@@ -384,15 +384,22 @@ for _bad_endpoint in 'https://host:443?secret=value' 'https://host:443#fragment'
   fi
 done
 
-# Never echo a rejected argument, including the --flag=value spelling.
-if "$HELPER" '--otlp-header=Authorization=example-secret-marker' \
-  >"$WORKDIR/rejected.out" 2>&1; then
-  fail "inline credential argument accepted"
-elif grep -q 'example-secret-marker' "$WORKDIR/rejected.out"; then
-  fail "rejected credential argument echoed"
-else
-  pass "rejected credential argument stays private"
-fi
+# Never echo a rejected argument, including split and --flag=value spellings.
+assert_private_rejection() {
+  if "$HELPER" "$@" >"$WORKDIR/rejected.out" 2>"$WORKDIR/rejected.err"; then
+    fail "credential-shaped argument accepted"
+  elif grep -q 'example-secret-marker' "$WORKDIR/rejected.out" "$WORKDIR/rejected.err"; then
+    fail "rejected credential argument echoed"
+  else
+    pass "rejected credential argument stays private"
+  fi
+}
+for _flag in --otlp-header --header; do
+  assert_private_rejection "$_flag" 'Authorization=Bearer example-secret-marker'
+  assert_private_rejection "$_flag=Authorization=Bearer example-secret-marker"
+done
+assert_private_rejection '--unknown=example-secret-marker'
+assert_private_rejection 'example-secret-marker'
 
 # A receipt must describe the actual metric requested, including its common
 # Prometheus spelling, rather than silently reverting to the default name.
