@@ -12,6 +12,9 @@ SECRET_LINE_PATTERN='header|authorization|www-authenticate|otlp-header|OTEL_EXPO
 SECRET_VALUE_PATTERN='(^|[^A-Za-z0-9_])(Basic[[:space:]]+[A-Za-z0-9+/=]{8,}|Bearer[[:space:]]+[A-Za-z0-9._~+/-]{8,})'
 
 is_uuid() {
+  case "$1" in
+    *[!0-9a-fA-F-]*) return 1 ;;
+  esac
   printf '%s' "$1" | grep -Eq '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
 }
 
@@ -42,6 +45,14 @@ normalize_otlp_endpoint() {
     echo "OTLP endpoint is empty" >&2
     return 1
   fi
+  # Reject ambiguous authorities and line delimiters before serializing argv.
+  case "$_raw" in
+    *'
+'*|*'?'*|*'#'*|*'@'*)
+      echo "OTLP endpoint must be a single host:port without userinfo, query, or fragment" >&2
+      return 1
+      ;;
+  esac
   _norm=$(printf '%s' "$_raw" | awk '{
     gsub(/^[[:space:]]+|[[:space:]]+$/, "")
     sub(/^[Hh][Tt][Tt][Pp][Ss]:\/\//, "")
@@ -50,21 +61,69 @@ normalize_otlp_endpoint() {
     if (match($0, /^[^\/]+/)) $0 = substr($0, 1, RLENGTH)
     print
   }')
-  if [ -z "$_norm" ]; then
-    echo "OTLP endpoint normalized to empty" >&2
+  if ! printf '%s' "$_norm" | grep -Eq '^([A-Za-z0-9][A-Za-z0-9.-]*|\[[0-9a-fA-F:]+\]):[0-9]{1,5}$'; then
+    echo "OTLP endpoint must contain a host and numeric port" >&2
     return 1
   fi
-  case "$_norm" in
-    *@*)
-      echo "OTLP endpoint must not include userinfo" >&2
-      return 1
-      ;;
-  esac
+  _port=${_norm##*:}
+  if [ "$_port" -lt 1 ] || [ "$_port" -gt 65535 ]; then
+    echo "OTLP endpoint port must be between 1 and 65535" >&2
+    return 1
+  fi
   printf '%s' "$_norm"
 }
 
 is_safe_id() {
-  printf '%s' "$1" | grep -Eq '^[A-Za-z0-9._:+=@-]+$'
+  case "$1" in
+    ''|*[!A-Za-z0-9._:+=@-]*) return 1 ;;
+  esac
+  return 0
+}
+
+validate_emit_limits() {
+  for _limit in "$@"; do
+    case "$_limit" in
+      ''|*[!0-9.ms]*) echo "invalid emit limit" >&2; return 1 ;;
+    esac
+  done
+  # Deliberately accept a small, finite subset of telemetrygen's number and
+  # duration syntax. Numeric comparisons also reject alternate zero spellings.
+  if ! printf '%s' "$1" | grep -Eq '^[0-9]+([.][0-9]+)?(ms|s)$' ||
+    ! printf '%s' "$1" | awk '{
+      n = $0 + 0; if ($0 ~ /ms$/) n /= 1000
+      exit !(n > 0 && n <= 60)
+    }'; then
+    echo "duration must be positive seconds or milliseconds, at most 60s" >&2
+    return 1
+  fi
+  if ! printf '%s' "$2" | grep -Eq '^([0-9]+([.][0-9]+)?|[.][0-9]+)$' ||
+    ! printf '%s' "$2" | awk '{ exit !($0 + 0 > 0 && $0 + 0 <= 100) }'; then
+    echo "rate must be a positive decimal, at most 100 per worker" >&2
+    return 1
+  fi
+  case "$3" in
+    [1-9]|10) ;;
+    *) echo "workers must be an integer between 1 and 10" >&2; return 1 ;;
+  esac
+}
+
+validate_signals() {
+  case "$1" in
+    ''|*[!a-z,]*) echo "invalid signal list" >&2; return 1 ;;
+  esac
+  # Validate the entire request before the first write. Duplicates would emit
+  # twice, while empty entries could otherwise produce a false success receipt.
+  if ! printf '%s' "$1" | grep -Eq '^(metrics|logs|traces)(,(metrics|logs|traces))*$'; then
+    echo "signals must be a nonempty comma-separated list of metrics, logs, traces" >&2
+    return 1
+  fi
+  _seen=,
+  for _candidate in $(printf '%s' "$1" | tr ',' ' '); do
+    case "$_seen" in
+      *,"$_candidate",*) echo "duplicate signal requested" >&2; return 1 ;;
+    esac
+    _seen="$_seen$_candidate,"
+  done
 }
 
 json_quote() {
@@ -243,7 +302,12 @@ signals_json_array() {
 metric_names_json_array() {
   case ",$1," in
     *,metrics,*)
-      printf '[%s,%s]' "$(json_quote last9.emit.telemetry)" "$(json_quote last9_emit_telemetry)"
+      _prom_name=$(printf '%s' "$2" | sed 's/[^A-Za-z0-9_:]/_/g')
+      if [ "$_prom_name" = "$2" ]; then
+        printf '[%s]' "$(json_quote "$2")"
+      else
+        printf '[%s,%s]' "$(json_quote "$2")" "$(json_quote "$_prom_name")"
+      fi
       ;;
     *)
       printf '[]'
@@ -267,6 +331,8 @@ last9_emit_telemetry_usage() {
 Usage: last9-emit-telemetry.sh --org <org-slug> --environment <env> --datasource <id> (--credential-file <path> | --credential-env <VAR>) [--signals metrics,logs,traces]
 
 Never pass plaintext credentials. --credential-file / --credential-env must name a local file.
+Limits: --duration positive seconds/milliseconds up to 60s (default 5s),
+--rate positive decimal up to 100 (default 1), --workers 1..10 (default 1).
 EOF
 }
 
@@ -289,6 +355,14 @@ last9_emit_telemetry_main() {
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
+      --org|--environment|--datasource|--credential-file|--credential-env|--signals|--service|--duration|--rate|--workers|--acceptance-run|--otlp-metric-name)
+        if [ "$#" -lt 2 ]; then
+          echo "missing required option value" >&2
+          return 1
+        fi
+        ;;
+    esac
+    case "$1" in
       --org) _org=$2; shift 2 ;;
       --environment) _environment=$2; shift 2 ;;
       --datasource) _datasource=$2; shift 2 ;;
@@ -309,7 +383,8 @@ last9_emit_telemetry_main() {
         return 1
         ;;
       *)
-        echo "unknown argument: $1" >&2
+        # Unknown arguments can themselves contain pasted credentials.
+        echo "unknown argument (value withheld)" >&2
         last9_emit_telemetry_usage >&2
         return 1
         ;;
@@ -321,24 +396,14 @@ last9_emit_telemetry_main() {
     return 1
   fi
   for _id in "$_org" "$_environment" "$_datasource" "$_service" "$_metric_name"; do
-    if ! is_safe_id "$_id"; then
+    if ! is_safe_id "$_id" || receipt_contains_forbidden "$(json_quote "$_id")"; then
       echo "org, environment, datasource, service, and metric name must be simple identifiers" >&2
       return 1
     fi
   done
 
-  case "$_duration" in
-    inf|INF|0|0s|"")
-      echo "duration must be a short finite bound (default 5s)" >&2
-      return 1
-      ;;
-  esac
-  case "$_rate" in
-    0|"")
-      echo "rate 0 is unlimited; refusing" >&2
-      return 1
-      ;;
-  esac
+  validate_signals "$_signals" || return 1
+  validate_emit_limits "$_duration" "$_rate" "$_workers" || return 1
 
   if [ "$_run_set" -eq 1 ]; then
     require_acceptance_run "$_run" >/dev/null || return 1
@@ -379,10 +444,6 @@ last9_emit_telemetry_main() {
   _any_fail=0
 
   for _signal in $(printf '%s' "$_signals" | tr ',' ' '); do
-    case "$_signal" in
-      metrics|logs|traces) ;;
-      *) echo "unknown signal: $_signal" >&2; return 1 ;;
-    esac
     _argv_file=$(mktemp "${TMPDIR:-/tmp}/last9-emit-argv.XXXXXX")
     build_telemetrygen_argv "$_signal" "$_endpoint" "$_service" "$_run" \
       "$_duration" "$_rate" "$_workers" "$_metric_name" "$_insecure" >"$_argv_file"
@@ -421,6 +482,11 @@ last9_emit_telemetry_main() {
     (
       set +x
       export OTEL_EXPORTER_OTLP_HEADERS="$_cred_headers"
+      # SDK signal-specific headers take precedence over the generic setting.
+      # Bind every signal to the explicitly authorized file, not ambient auth.
+      export OTEL_EXPORTER_OTLP_METRICS_HEADERS="$_cred_headers"
+      export OTEL_EXPORTER_OTLP_LOGS_HEADERS="$_cred_headers"
+      export OTEL_EXPORTER_OTLP_TRACES_HEADERS="$_cred_headers"
       # Headers stay in the child environment, never on argv / process listing.
       "$_cmd_bin" "$@" >"$_out" 2>"$_err"
     )
@@ -428,7 +494,9 @@ last9_emit_telemetry_main() {
     set -e
     rm -f "$_argv_file"
     sanitize_exporter_output <"$_out" >/dev/null
-    sanitize_exporter_output <"$_err" >&2
+    # A diagnostic can contain a bare/decoded secret with no header-shaped
+    # marker. Expose only the receipt, never arbitrary generator output.
+    sanitize_exporter_output <"$_err" >/dev/null
     rm -f "$_out" "$_err"
     if [ "$_st" -ne 0 ]; then
       _any_fail=1
@@ -450,7 +518,7 @@ last9_emit_telemetry_main() {
   fi
   _ended=$(utc_now)
   _receipt=$(build_receipt "$_run" "$_org" "$_environment" \
-    "$(signals_json_array "$_signals")" "$(metric_names_json_array "$_signals")" \
+    "$(signals_json_array "$_signals")" "$(metric_names_json_array "$_signals" "$_metric_name")" \
     "$_service" "$_started" "$_ended" "$_datasource" "$_export" "no")
   if receipt_contains_forbidden "$_receipt"; then
     echo "receipt redaction failed; refusing to print" >&2

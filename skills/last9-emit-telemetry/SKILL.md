@@ -22,7 +22,7 @@ Stop unless all of these are present:
 4. **`telemetrygen`** on `PATH` (or an equivalent generator that honors the same attribute and endpoint rules). Install with `go install github.com/open-telemetry/opentelemetry-collector-contrib/cmd/telemetrygen@v0.163.0`.
 5. **Last9 MCP** connected to the **same** org for readback (`prometheus_*`, `get_logs`, `get_traces`). If those tools are missing, emit may still run, but you must not claim queryability.
 
-If the working tree is this repository, run the helper instead of hand-rolling `telemetrygen` (it normalizes endpoints, quotes attributes, and suppresses header logs):
+If the working tree is this repository, run the helper instead of hand-rolling `telemetrygen` (it normalizes endpoints, quotes attributes, and suppresses generator logs):
 
 ```bash
 scripts/last9-emit-telemetry.sh \
@@ -33,17 +33,17 @@ scripts/last9-emit-telemetry.sh \
   --signals metrics,logs,traces
 ```
 
-`--credential-env LAST9_OTLP_CREDENTIAL_FILE` is also valid when that variable holds a **path**. Credential files stay local and untracked. Allowed keys only: `OTEL_EXPORTER_OTLP_ENDPOINT` / `OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_HEADERS` / `OTLP_HEADERS`. Do not `cat`, `echo`, or commit the file.
+`--credential-env LAST9_OTLP_CREDENTIAL_FILE` is also valid when that variable holds a **path**. Credential files stay local and untracked. Allowed keys only: `OTEL_EXPORTER_OTLP_ENDPOINT` / `OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_HEADERS` / `OTLP_HEADERS`. Parse these keys as data; never source the file as shell code. Do not `cat`, `echo`, or commit the file. The authorized headers must override both generic and signal-specific OTLP header environment variables in the generator subprocess.
 
 ## Anti-pattern checklist
 
 | # | Anti-pattern | Do this instead |
 |---|--------------|-----------------|
-| 1 | Accepting a pasted token / `--otlp-header` / printing `OTEL_EXPORTER_OTLP_HEADERS` | Take a file path or env **name**; source inside a subshell with `set +x`; never pass `--otlp-header` |
+| 1 | Accepting a pasted token / `--otlp-header` / printing `OTEL_EXPORTER_OTLP_HEADERS` | Take a file path or env **name**; parse supported keys inside a subshell with `set +x`; never pass `--otlp-header` |
 | 2 | `telemetrygen --otlp-endpoint https://host:443/` (gRPC) | Normalize to `host:port`: strip `https://` / `http://` and trailing `/` before invoking |
-| 3 | Showing telemetrygen config output (it logs exporter headers by default) | Capture stdout/stderr and drop credential-shaped lines; never `set -x` |
+| 3 | Showing telemetrygen config output (it logs exporter headers by default) | Suppress all generator stdout/stderr; bare or decoded secrets may have no recognizable marker; never `set -x` |
 | 4 | Emitting without `acceptance_run` | Generate a UUID first; set resource `service.name` + `acceptance_run` and signal-level `acceptance_run` |
-| 5 | Long/unbounded generate (`--duration inf`, `--rate 0`) | Default **5s**, **rate 1**, **workers 1**; refuse inf/unlimited |
+| 5 | Long/unbounded generate (`--duration inf`, `--rate 0`) | Default **5s**, **rate 1**, **workers 1**; require positive values, capped at **60s**, **100 per worker per second**, **10 workers** |
 | 6 | Creating alerts, recording rules, dashboards, or deploy config as part of emit | Out of scope. Alert creation, rule mutation, and deployment need **separate user authorization** |
 | 7 | "Export succeeded, so Last9 has it" | Distinguish **OTLP client export** from **queryable in Last9**; claim the latter only after readback finds the run ID |
 | 8 | Retrying the write / duplicating resources when readback is empty | Classify the miss; do not emit again |
@@ -52,8 +52,8 @@ scripts/last9-emit-telemetry.sh \
 
 1. **Confirm target + credential reference + datasource.** State org, environment, signals, duration/rate, service name (`last9-emit-telemetry` unless the user named one), credential **path**, and datasource. For a production target, get an extra explicit yes. Do not dump the credential file.
 2. **Generate `acceptance_run`.** One UUID for the whole run. Refuse to emit if it is missing or not a UUID.
-3. **Normalize the endpoint from the credential file** (do not print headers). telemetrygen gRPC wants `host:port`.
-4. **Emit** via the helper when present. Otherwise recreate the same wrapper: subshell, `set +x`, headers only in `OTEL_EXPORTER_OTLP_HEADERS`, **no** `--otlp-header`, capture output, suppress credential-shaped lines. Repeat once per signal:
+3. **Validate the full request before writing.** Require a nonempty, duplicate-free comma-separated signal list. Duration accepts positive decimal seconds or milliseconds (`s` / `ms`), at most 60s; rate accepts a positive decimal up to 100; workers must be an integer from 1 to 10. Normalize the endpoint from the credential file (do not print headers) to `host:port` with a port from 1 to 65535; reject userinfo, queries, fragments, and line breaks.
+4. **Emit** via the helper when present. Otherwise recreate the same wrapper: subshell, `set +x`, set `OTEL_EXPORTER_OTLP_HEADERS` and all three `OTEL_EXPORTER_OTLP_{METRICS,LOGS,TRACES}_HEADERS` to the authorized file value inside the subprocess, **no** `--otlp-header`, suppress all generator output. Repeat once per signal:
 
 ```bash
 telemetrygen <metrics|logs|traces> \
@@ -65,7 +65,7 @@ telemetrygen <metrics|logs|traces> \
   --telemetry-attributes 'acceptance_run="<uuid>"'
 ```
 
-For metrics, also set `--otlp-metric-name last9.emit.telemetry`. Use `--otlp-insecure` only for localhost plaintext; Last9 `:443` endpoints stay on TLS.
+For metrics, also set `--otlp-metric-name last9.emit.telemetry`. If overridden, the receipt must list the requested name and its possible Prometheus spelling, not the default; discover the actual stored name during readback. Use `--otlp-insecure` only for localhost plaintext; Last9 `:443` endpoints stay on TLS.
 
 5. **Print a receipt** with only non-secret IDs/config: `acceptance_run`, org, environment, signal types, metric names, `service.name`, start/end UTC, intended datasource, `otlp_export` (`client_ok` / `client_failed`), `last9_queryable` (`no` until readback). Never include headers, tokens, file contents, or raw generator config.
 6. **Readback against the intended datasource** — see below. One or two **read** polls are allowed; never a second write.
