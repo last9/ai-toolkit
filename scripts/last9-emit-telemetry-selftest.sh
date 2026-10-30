@@ -338,11 +338,11 @@ expect_preflight_failure() {
 for _bad_signals in '' ',' 'metrics,bogus' 'metrics,metrics' 'metrics,' 'metrics,,logs' 'metrics logs' '*'; do
   expect_preflight_failure --signals "$_bad_signals"
 done
-for _bad_rate in 0 0.0 00 -1 NaN Inf 1e999 101 '1
+for _bad_rate in 0 0.0 0e0 -0 00 -1 NaN Inf 1e999 101 '1
 --otlp-insecure'; do
   expect_preflight_failure --rate "$_bad_rate"
 done
-for _bad_duration in 0s 0ms 0.0s -1s inf INF 1h 61s 60001ms '5s
+for _bad_duration in 0s 0ms 0.0s -1s -1ns inf INF Inf iNf 1h 61s 60001ms '5s
 --otlp-insecure'; do
   expect_preflight_failure --duration "$_bad_duration"
 done
@@ -359,7 +359,7 @@ expect_preflight_failure --acceptance-run "$_valid
 expect_preflight_failure --acceptance-run "$_valid
 "
 
-for _limits in '59s 99 9' '60s 100 10' '60000ms .1 1' '0.5s 0.1 1'; do
+for _limits in '5s 1 1' '59s 99 9' '60s 100 10' '60000ms .1 1' '0.5s 0.1 1'; do
   # Intentional splitting of constant test tuples, never of user input.
   set -- $_limits
   if "$HELPER" --dry-run --org example-org --environment alpha \
