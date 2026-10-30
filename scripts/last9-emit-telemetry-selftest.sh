@@ -401,16 +401,39 @@ done
 assert_private_rejection '--unknown=example-secret-marker'
 assert_private_rejection 'example-secret-marker'
 
-# A receipt must describe the actual metric requested, including its common
-# Prometheus spelling, rather than silently reverting to the default name.
-_custom=$("$HELPER" --dry-run --org example-org --environment alpha \
-  --datasource metrics-ds --credential-file "$CRED" --signals metrics \
-  --otlp-metric-name custom.test.metric --acceptance-run "$_valid")
-if printf '%s' "$_custom" | grep -Fq '"metric_names":["custom.test.metric","custom_test_metric"]'; then
-  pass "receipt reflects custom metric name"
-else
-  fail "receipt lost custom metric name"
-fi
+# A receipt must describe the metric actually passed to the child, including
+# its possible Prometheus spelling. Non-metrics runs have no metric names.
+cat >"$FAKEBIN/telemetrygen" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$@" >"$EMIT_TEST_ARGV"
+EOF
+export EMIT_TEST_ARGV="$WORKDIR/metric.argv"
+assert_metric_receipt() {
+  _test_signals=$1
+  _expected_metric=$2
+  _expected_names=$3
+  shift 3
+  if ! PATH="$FAKEBIN:$PATH" "$HELPER" \
+    --org example-org --environment alpha --datasource metrics-ds \
+    --credential-file "$CRED" --signals "$_test_signals" \
+    --acceptance-run "$_valid" "$@" >"$WORKDIR/metric.receipt"; then
+    fail "metric receipt invocation failed"
+    return
+  fi
+  _child_metric=$(awk '$0 == "--otlp-metric-name" { getline; print }' "$EMIT_TEST_ARGV")
+  if [ "$_child_metric" = "$_expected_metric" ] &&
+    grep -Fq "\"metric_names\":$_expected_names" "$WORKDIR/metric.receipt"; then
+    pass "child metric name and receipt agree"
+  else
+    fail "child metric name and receipt disagree"
+  fi
+}
+assert_metric_receipt metrics last9.emit.telemetry '["last9.emit.telemetry","last9_emit_telemetry"]'
+assert_metric_receipt metrics custom.test.metric '["custom.test.metric","custom_test_metric"]' \
+  --otlp-metric-name custom.test.metric
+assert_metric_receipt metrics custom_metric '["custom_metric"]' --otlp-metric-name custom_metric
+assert_metric_receipt logs '' '[]' --otlp-metric-name custom.test.metric
+assert_metric_receipt traces '' '[]' --otlp-metric-name custom.test.metric
 
 # Signal-specific SDK headers override generic headers. The credential file
 # must win over an unrelated parent process's exporter configuration.
