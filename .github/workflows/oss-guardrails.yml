@@ -156,3 +156,4 @@ jobs:
           # forbids committed plugin skill copies outright.
           scripts/check-skill-pack.sh
           scripts/check-skill-pack-selftest.sh
+          scripts/last9-emit-telemetry-selftest.sh
