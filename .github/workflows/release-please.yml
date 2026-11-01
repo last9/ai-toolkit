@@ -5,15 +5,26 @@ on:
     branches:
       - master
 
-permissions:
-  contents: write
-  pull-requests: write
+# Writes go through the Last9 AI Toolkit Release GitHub App token so
+# Release Please PRs and tags can trigger other workflows (GITHUB_TOKEN cannot).
+permissions: {}
 
 jobs:
   release-please:
+    # Forks do not get org/repo secrets; skip so public clones do not fail CI.
+    if: github.repository == 'last9/ai-toolkit'
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ secrets.RELEASE_PLEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_PLEASE_APP_PRIVATE_KEY }}
+          owner: last9
+          repositories: ai-toolkit
+
       - uses: googleapis/release-please-action@v4
         with:
+          token: ${{ steps.app-token.outputs.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
