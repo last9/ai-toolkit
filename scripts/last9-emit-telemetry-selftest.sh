@@ -255,6 +255,29 @@ case "$_env_receipt" in
 esac
 unset LAST9_OTLP_CREDENTIAL_FILE
 
+# A matching line must not let the rest of a variable name reach eval.
+# Check the side effect as well as status: injected code can run before failure.
+_injected_name=$(printf 'PATH}\nprintf injected > "%s"\n#\nPATH' "$WORKDIR/executed")
+for _bad_name in "$_injected_name" 'PATH
+PATH' 'PATH
+' '1PATH' 'PATH-NAME' "$(printf 'PATH\r\nPATH')"; do
+  if "$HELPER" --dry-run \
+    --org example-org --environment alpha --datasource metrics-ds \
+    --credential-env "$_bad_name" --acceptance-run "$_valid" \
+    >"$WORKDIR/env.out" 2>"$WORKDIR/env.err"; then
+    fail "CLI accepted invalid credential variable name"
+  elif [ -s "$WORKDIR/env.out" ] ||
+    [ "$(cat "$WORKDIR/env.err")" != 'credential env must be a variable name, not a value' ]; then
+    fail "invalid credential variable name bypassed private validation"
+  else
+    pass "CLI rejects entire invalid credential variable name"
+  fi
+  if [ -e "$WORKDIR/executed" ]; then
+    fail "credential variable name executed shell code"
+    rm -f "$WORKDIR/executed"
+  fi
+done
+
 if "$HELPER" --dry-run \
   --org example-org --environment alpha --datasource metrics-ds \
   --credential-env 'Authorization=not-a-path' >/dev/null 2>&1; then

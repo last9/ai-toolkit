@@ -415,10 +415,13 @@ last9_emit_telemetry_main() {
   fi
 
   if [ -n "$_cred_env" ]; then
-    if ! printf '%s' "$_cred_env" | grep -Eq '^[A-Za-z_][A-Za-z0-9_]*$'; then
-      echo "credential env must be a variable name, not a value" >&2
-      return 1
-    fi
+    # Match the whole value: grep anchors validate lines, not shell input.
+    case "$_cred_env" in
+      [!A-Za-z_]*|*[!A-Za-z0-9_]*)
+        echo "credential env must be a variable name, not a value" >&2
+        return 1
+        ;;
+    esac
     eval "_cred_file=\${$_cred_env-}"
     if credential_ref_looks_like_secret "$_cred_file"; then
       echo "credential env must hold a file path, not a secret" >&2
