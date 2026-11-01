@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/last9/ai-toolkit/compare/opencode-last9-v0.4.0...opencode-last9-v0.5.0) (2026-11-01)
+
+
+### Features
+
+* **skills:** add last9-emit-telemetry for isolated OTLP test emits ([#26](https://github.com/last9/ai-toolkit/issues/26)) ([925a149](https://github.com/last9/ai-toolkit/commit/925a1496d3065d9f5d525f391ef866a7aee9d4cd))
+
 ## [0.4.0](https://github.com/last9/ai-toolkit/compare/opencode-last9-v0.3.0...opencode-last9-v0.4.0) (2026-10-22)
 
 
