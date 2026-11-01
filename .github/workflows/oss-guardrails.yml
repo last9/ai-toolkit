@@ -142,6 +142,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # check-skill-pack.sh runs `npm pack`; use the pinned Node, not the
+      # runner default.
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version-file: plugins/opencode-last9/.nvmrc
+
       - name: Verify skill distribution
         run: |
           # Repo-as-hub model: skills/ is the single source of truth. This

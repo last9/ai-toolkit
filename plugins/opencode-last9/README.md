@@ -36,7 +36,7 @@ export LAST9_ORG_SLUG="<org-slug>"
 ## What it registers
 
 - **`last9` MCP server** — a remote MCP endpoint at `https://app.last9.io/api/v4/organizations/<org-slug>/mcp`. OpenCode handles OAuth automatically (dynamic client registration + browser flow).
-- **Last9 skills** — the canonical skills from [`last9/ai-toolkit`](https://github.com/last9/ai-toolkit) (`last9-logs`, `last9-traces`, `last9-cloudwatch`, `go-agent-install`), loaded via `skills.paths`.
+- **Last9 skills** — the canonical skills from [`last9/ai-toolkit`](https://github.com/last9/ai-toolkit) (`last9-logs`, `last9-traces`, `last9-api`, `last9-cloudwatch`, `go-agent-install`), loaded via `skills.paths`.
 
 ## Configuration
 
@@ -68,6 +68,10 @@ opencode mcp list   # last9 should appear as connected or needs authentication
 ```
 
 ## Development
+
+Use the Node release pinned in `.nvmrc` (`nvm use`); CI reads the same file.
+`engines.node` admits only Node 22, 24 and 26 releases that reject the revoked
+eMudhra intermediates (22.23.4+, 24.22.1+, 26.12.1+).
 
 ```shell
 npm install

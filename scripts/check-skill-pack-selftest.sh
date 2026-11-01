@@ -150,6 +150,63 @@ printf 'orphan\n' > "$FIX/skills/orphan/references/family.md"
 commit_fault
 expect_fail "reference without entrypoint"
 
+setup_fixture script-happy
+mkdir -p "$FIX/skills/last9-logs/scripts"
+printf 'print(1)\n' > "$FIX/skills/last9-logs/scripts/helper.py"
+printf 'print(2)\n' > "$FIX/skills/last9-logs/scripts/test_helper.py"
+commit_fault
+if ! run_full sh "$FIX/scripts/check-skill-pack.sh" >/dev/null 2>&1; then
+  echo "selftest FAILED: tracked flat Python script expected exit 0" >&2
+  exit 1
+fi
+
+setup_fixture script-wrong-ext
+mkdir -p "$FIX/skills/last9-logs/scripts"
+printf 'x\n' > "$FIX/skills/last9-logs/scripts/helper.js"
+commit_fault
+expect_fail "script with wrong extension"
+
+setup_fixture script-nested
+mkdir -p "$FIX/skills/last9-logs/scripts/sub"
+printf 'x\n' > "$FIX/skills/last9-logs/scripts/sub/helper.py"
+commit_fault
+expect_fail "nested script"
+
+setup_fixture script-uppercase-or-dash
+mkdir -p "$FIX/skills/last9-logs/scripts"
+printf 'x\n' > "$FIX/skills/last9-logs/scripts/Helper-Run.py"
+commit_fault
+expect_fail "script with uppercase or dash"
+
+setup_fixture script-symlink
+mkdir -p "$FIX/skills/last9-logs/scripts"
+printf 'outside skill\n' > "$FIX/outside.py"
+ln -s ../../../outside.py "$FIX/skills/last9-logs/scripts/helper.py"
+commit_fault
+expect_fail "tracked script symlink"
+
+setup_fixture script-parent-symlink
+mkdir -p "$FIX/skills/last9-logs/scripts"
+printf 'print(1)\n' > "$FIX/skills/last9-logs/scripts/helper.py"
+commit_fault
+mv "$FIX/skills/last9-logs/scripts" "$FIX/outside-scripts"
+ln -s ../../outside-scripts "$FIX/skills/last9-logs/scripts"
+expect_fail "working-tree script parent symlink"
+
+setup_fixture script-missing-from-tarball
+mkdir -p "$FIX/skills/last9-logs/scripts"
+printf 'print(1)\n' > "$FIX/skills/last9-logs/scripts/helper.py"
+commit_fault
+jq '.scripts.prepack += " && rm skills/last9-logs/scripts/helper.py"' "$FIX/plugins/opencode-last9/package.json" > "$FIX/package.tmp"
+mv "$FIX/package.tmp" "$FIX/plugins/opencode-last9/package.json"
+expect_fail "missing packaged script"
+
+setup_fixture script-without-entrypoint
+mkdir -p "$FIX/skills/orphan/scripts"
+printf 'print(1)\n' > "$FIX/skills/orphan/scripts/helper.py"
+commit_fault
+expect_fail "script without entrypoint"
+
 # The gate must never delete or inspect another invocation's archive.
 setup_fixture archive-isolation
 ARCHIVE_TMP="$SANDBOX/archive-temp"
