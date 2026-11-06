@@ -4,6 +4,7 @@ import io
 import json
 import os
 import stat
+import subprocess
 import sys
 import tempfile
 import time
@@ -232,6 +233,20 @@ class TestLogin(Base):
         self.assertIn("org: acme", out)
         self.assertNotIn(self.refresh, out + err)
         self.assertEqual(last9.load_creds()["profiles"]["default"]["refresh_token"], self.refresh)
+
+    def test_no_tty_points_to_with_token(self):
+        # A real process with stdin from /dev/null and no controlling terminal,
+        # like an agent's shell passthrough: getpass cannot prompt there.
+        p = subprocess.run(
+            [sys.executable, os.path.join(HERE, "last9.py"), "login", "--no-browser"],
+            stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30,
+            start_new_session=True, env=dict(os.environ))
+        self.assertNotEqual(p.returncode, 0)
+        self.assertNotIn("Traceback", p.stderr)
+        self.assertEqual(len(p.stderr.strip().splitlines()), 1, p.stderr)
+        self.assertIn("--with-token", p.stderr)
+        self.assertEqual(p.stdout, "")
+        self.assertFalse(os.path.exists(self.cfg))
 
     def test_status_not_logged_in(self):
         code, _, err = self.run_cli(["status"])

@@ -27,6 +27,12 @@ The user runs login themselves. Never ask the user to paste a token into chat.
    ```
 
    It opens the API Access page, prompts for the refresh token with hidden input, validates it by exchanging it, and saves it to `~/.last9/credentials` (mode 0600). Only Admins can create refresh tokens; Editors must ask an Admin. `--region` is saved with the profile and added automatically to logs/traces calls. Add `--no-browser` to skip opening the browser.
+
+   If the agent's shell has no terminal (login exits with "login needs a terminal"), have the user copy the token to the clipboard and pipe it in with `--with-token` (on Linux use `xclip -o -selection clipboard` or `wl-paste` instead of `pbpaste`):
+
+   ```text
+   ! pbpaste | python3 <skill-dir>/scripts/last9.py login --with-token --region <region>
+   ```
 3. In CI, set `LAST9_REFRESH_TOKEN` from a secret store instead. It wins over saved profiles and is never written to disk.
 4. Run `status` again to confirm org, host, scopes, and expiry. It prints no secrets.
 
