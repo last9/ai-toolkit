@@ -160,6 +160,9 @@ def cmd_login(a):
     if a.with_token:
         token = sys.stdin.read().strip()
     else:
+        if not sys.stdin.isatty():  # e.g. an agent's shell passthrough: getpass would crash
+            die("login needs a terminal to read the token; pipe it instead "
+                "(pbpaste | last9.py login --with-token) or run login in a real terminal")
         print("Create a refresh token at %s (Admins create refresh tokens; "
               "Editors must ask an Admin)." % API_ACCESS_URL)
         if not a.no_browser:
