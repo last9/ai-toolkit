@@ -26,9 +26,10 @@ def jwt(**claims):
 
 
 class FakeResp(io.BytesIO):
-    def __init__(self, body, status=200):
+    def __init__(self, body, status=200, headers=None):
         super().__init__(body if isinstance(body, bytes) else body.encode())
         self.status = status
+        self.headers = headers or {}
 
     def __enter__(self):
         return self
@@ -208,6 +209,36 @@ class TestApi(Base):
         self.assertEqual(req.get_header("Content-type"), "application/json")
         self.assertIn("HTTP 200", err)
         self.assertNotIn("SECRETACCESS", out + err)
+
+    def test_headers_prints_redacted_response_evidence_to_stderr(self):
+        self.login()
+        response = FakeResp(b'{"ok":1}', headers={
+            "Content-Type": "application/json",
+            "Cache-Control": "private, max-age=60",
+            "X-Api-Key": "secret-api-key",
+            "X-Request-Note": "Bearer response-token",
+            "X-Session": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.signature",
+            "Authorization": "Basic hidden-authorization",
+            "Set-Cookie": "session=hidden-cookie; Secure",
+        })
+        with mock.patch("urllib.request.urlopen", side_effect=[token_resp(), response]):
+            code, out, err = self.run_cli(["api", "GET", "x", "--headers"])
+        self.assertEqual((code, out), (0, '{"ok":1}'))
+        self.assertEqual(err, "HTTP 200\nContent-Type: application/json\n"
+                              "Cache-Control: private, max-age=60\n"
+                              "X-Api-Key: [REDACTED]\n"
+                              "X-Request-Note: [REDACTED]\n"
+                              "X-Session: [REDACTED]\n")
+        for secret in ("secret-api-key", "response-token", "signature",
+                       "hidden-authorization", "hidden-cookie"):
+            self.assertNotIn(secret, out + err)
+
+    def test_include_status_remains_status_only(self):
+        self.login()
+        response = FakeResp(b"ok", headers={"Content-Type": "text/plain"})
+        with mock.patch("urllib.request.urlopen", side_effect=[token_resp(), response]):
+            code, out, err = self.run_cli(["api", "GET", "x", "-i"])
+        self.assertEqual((code, out, err), (0, "ok", "HTTP 200\n"))
 
     def test_foreign_host_never_sent(self):
         self.login()
