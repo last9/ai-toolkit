@@ -9,6 +9,7 @@ import getpass
 import hashlib
 import json
 import os
+import re
 import sys
 import tempfile
 import time
@@ -21,6 +22,17 @@ from datetime import datetime, timezone
 API_ACCESS_URL = "https://app.last9.io/settings/api-access"
 REFRESH_MARGIN = 3600  # re-exchange when the cached access token has <= 1h left
 TIMEOUT = 60
+OMITTED_RESPONSE_HEADERS = {"authorization", "proxy-authorization", "set-cookie"}
+SENSITIVE_HEADER_NAME = re.compile(r"(?:^|[-_])(auth|cookie|credential|key|secret|session|token)(?:$|[-_])", re.I)
+TOKEN_LIKE_VALUE = re.compile(
+    r"(?:\b(?:basic|bearer)\s+\S+"
+    r"|\beyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b"
+    r"|\b(?:access|api|id|refresh|session)[-_]?(?:key|token)\s*[=:]\s*\S+"
+    r"|\b(?:gh[opusr]_|sk-|xox[baprs]-)[A-Za-z0-9_-]+"
+    r"|\b(?=[A-Za-z0-9_+/=-]{24,}\b)(?=[A-Za-z0-9_+/=-]*[A-Za-z])"
+    r"(?=[A-Za-z0-9_+/=-]*\d)[A-Za-z0-9_+/=-]+)",
+    re.I,
+)
 
 
 def die(msg):
@@ -252,11 +264,26 @@ def send(method, url, token, data, headers):
     req = urllib.request.Request(url, data=data, headers=h, method=method)
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
-            return r.status, r.read()
+            return r.status, r.read(), r.headers
     except urllib.error.HTTPError as e:
-        return e.code, e.read()
+        return e.code, e.read(), e.headers
     except urllib.error.URLError as e:
         die("request failed: %s" % e.reason)
+
+
+def response_header_lines(headers):
+    """Return safe response-header evidence without credential-bearing values."""
+    lines = []
+    for name, value in headers.items():
+        clean_name = name.replace("\r", " ").replace("\n", " ")
+        normalized_name = clean_name.lower()
+        if normalized_name in OMITTED_RESPONSE_HEADERS:
+            continue
+        clean_value = value.replace("\r", " ").replace("\n", " ")
+        if SENSITIVE_HEADER_NAME.search(normalized_name) or TOKEN_LIKE_VALUE.search(clean_value):
+            clean_value = "[REDACTED]"
+        lines.append("%s: %s" % (clean_name, clean_value))
+    return lines
 
 
 def cmd_api(a):
@@ -273,14 +300,18 @@ def cmd_api(a):
     headers = {k.strip(): v.strip() for k, v in headers.items()}
     urllib.request.install_opener(urllib.request.build_opener(NoRedirect))
     method = a.method.upper()
-    code, body = send(method, url, access_token(ctx), data, headers)
+    code, body, response_headers = send(method, url, access_token(ctx), data, headers)
     if code == 401 or (400 <= code < 500 and b"expired" in body.lower()):
-        code, body = send(method, url, access_token(ctx, force=True), data, headers)  # retry once
+        code, body, response_headers = send(  # retry once
+            method, url, access_token(ctx, force=True), data, headers)
     sys.stdout.flush()
     sys.stdout.buffer.write(body)
     ok = 200 <= code < 300
-    if a.i or not ok:
+    if a.i or a.headers or not ok:
         sys.stderr.write("HTTP %d\n" % code)
+    if a.headers:
+        for line in response_header_lines(response_headers):
+            sys.stderr.write(line + "\n")
     sys.exit(0 if ok else 1)
 
 
@@ -303,6 +334,8 @@ def main(argv=None):
     s.add_argument("-q", action="append", default=[], metavar="K=V", help="query param (repeatable)")
     s.add_argument("-H", action="append", default=[], metavar="'K: V'", help="extra header (repeatable)")
     s.add_argument("-i", action="store_true", help="always print HTTP status to stderr")
+    s.add_argument("-I", "--headers", action="store_true",
+                   help="print status and redacted response headers to stderr")
     s.set_defaults(fn=cmd_api)
     a = p.parse_args(argv)
     if "/" in a.profile or a.profile.startswith("."):

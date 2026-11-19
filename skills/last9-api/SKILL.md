@@ -45,12 +45,13 @@ Config lives in `~/.last9` (override with `LAST9_CONFIG_DIR`). `logout` removes 
 ## Using `api`
 
 ```bash
-python3 <skill-dir>/scripts/last9.py api METHOD PATH [-d DATA] [-q k=v ...] [-H 'K: V' ...] [-i]
+python3 <skill-dir>/scripts/last9.py api METHOD PATH [-d DATA] [-q k=v ...] [-H 'K: V' ...] [-i | -I]
 ```
 
 - `PATH` without a leading `/api/` is relative to `https://<host>/api/v4/organizations/<org>/`. A path starting `/api/` is used on the token's host (for example `/api/v4/oauth/...`).
 - `-q k=v` is repeatable and URL-encoded. `-d` takes a literal string, `@file`, or `-` for stdin and sets `Content-Type: application/json`.
 - 2xx: body to stdout, exit 0. Otherwise: body to stdout, `HTTP <code>` to stderr, exit 1. `-i` prints the status on success too.
+- `-I` / `--headers` prints the status and redacted response headers to stderr, while keeping the response body on stdout. It omits `Authorization` and `Set-Cookie` and redacts sensitive names and token-like values.
 
 ## Task to reference
 
